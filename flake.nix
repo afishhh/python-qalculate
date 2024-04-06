@@ -10,11 +10,22 @@
         pkgs = nixpkgs.legacyPackages.${system};
       in
       with pkgs.lib; {
+        packages.libqalculate =pkgs.libqalculate.overrideAttrs (old: {
+          version = "unstable-2023-04-06";
+          src = "" + (builtins.fetchTree {
+            type = "github";
+            owner = "Qalculate";
+            repo = "libqalculate";
+            rev = "f87048ddad81135049517b64d9f145ec83d08859";
+          });
+        });
+
         devShell = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
             bashInteractive
             mypy
           ];
+
           buildInputs = with pkgs; [
             (pkgs.python3Packages.buildPythonApplication {
               pname = "pybind11-stubgen";
@@ -29,15 +40,7 @@
               };
               dontWrapPythonPrograms = true;
             })
-            (libqalculate.overrideAttrs (old: {
-              version = "unstable-2023-04-06";
-              src = builtins.fetchTree {
-                type = "github";
-                owner = "Qalculate";
-                repo = "libqalculate";
-                rev = "f87048ddad81135049517b64d9f145ec83d08859";
-              };
-            }))
+            self.packages.${pkgs.system}.libqalculate
             (python3Packages.pybind11.overrideAttrs (old: {
               src = builtins.fetchTree {
                 type = "github";
@@ -49,6 +52,10 @@
             python3
             # (pkgs.callPackage ./qalculate-static.nix {})
           ];
+
+          shellHook = ''
+            export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -I${pkgs.python3}/include/python3.11"
+          '';
         };
       });
 }
