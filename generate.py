@@ -327,7 +327,10 @@ with function_declaration(
 
 header.write("namespace PYBIND11_NAMESPACE {\n")
 header.write("template <> struct polymorphic_type_hook<MathStructure> {\n")
-header.write("    static void const *get(MathStructure const *src, std::type_info const *&type) {\n")
+header.write(
+    "    static void const *get(MathStructure const *src, std::type_info const *&type) {\n"
+)
+header.write("        if(src == nullptr) return nullptr;\n")
 header.write("        switch(src->type()) {\n")
 for name in structure_types:
     class_ = f"MathStructure{snake_to_pascal(name)}Proxy"
@@ -335,7 +338,9 @@ for name in structure_types:
     header.write(f"            type = &typeid({class_});\n")
     header.write(f"            return static_cast<{class_} const *>(src);\n")
 header.write(f"        default:\n")
-header.write('             throw std::runtime_error("No proxy object for MathStructure type " + std::to_string(src->type()));\n')
+header.write(
+    '             throw std::runtime_error("No proxy object for MathStructure type " + std::to_string(src->type()));\n'
+)
 header.write("         }\n")
 header.write("    }\n")
 header.write("};\n")
