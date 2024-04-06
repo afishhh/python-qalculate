@@ -9,6 +9,5 @@ if [[ "$#" -gt 0 ]]; then
 else
 	echo "Compiling module"
 	"$0" ./module.cc ./options.cc ./generated.o -o qalculate"$(python3-config --extension-suffix)"
-	stubgen -m qalculate -o .
-	sed -i "s/MathStructureRef/MathStructure/g" ./qalculate.pyi
+	PYTHONPATH=$(pwd):$PYTHONPATH pybind11-stubgen -o . qalculate --enum-class-locations '.*:qalculate'
 fi
