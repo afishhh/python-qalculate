@@ -124,14 +124,16 @@ def extract_declaration(keyword: str, name: str, text: str):
     return text[start : end + 1]
 
 
-def process_options_declaration(name: str, text: str, exclude: set[str]):
+def process_options_declaration(
+    name: str, text: str, exclude: set[str], override_class=None
+):
     declarations = text.splitlines()[1:-1]
     field_regex = re.compile("([a-zA-Z_]+)\\s+([a-zA-Z_]+);")
 
     with function_declaration(
-        f"void add_{pascal_to_snake(name)}_properties(pybind11::class_<{name}> &options_class)"
+        f"void add_{pascal_to_snake(name)}(pybind11::module_ &m)"
     ):
-        impl.write("    options_class\n")
+        impl.write(f'    pybind11::class_<{override_class or name}>(m, "{name}")\n')
         options = {}
         for line in declarations:
             if match := field_regex.match(line.strip()):
@@ -142,7 +144,34 @@ def process_options_declaration(name: str, text: str, exclude: set[str]):
                     f'        .def_readwrite("{camel_to_snake(field)}", &{name}::{field})\n'
                 )
                 options[field] = type
-        # TODO: generate a nice constructor with kwargs
+
+        impl.write("        .def(py::init([](")
+        options = list(options.items())
+        for i, (field, type) in enumerate(options):
+            if i > 0:
+                impl.write(",")
+            impl.write(f"{type} {field}")
+        impl.write("){")
+        impl.write(f"{name} result;")
+        for field, type in options:
+            impl.write(f"result.{field}={field};")
+        impl.write(f"return result;")
+        impl.write("}),py::kw_only{}")
+        for field, type in options:
+            impl.write(f',py::arg("{field}") = default_{pascal_to_snake(name)}.{field}')
+        impl.write(")\n")
+
+        impl.write(f'        .def("__repr__", [](py::object s) {{\n')
+        impl.write(f'            std::string output = "{name}(";\n')
+        for i, (field, type) in enumerate(options):
+            if i != 0:
+                impl.write(f'            output += ", ";\n')
+            impl.write(f'            output += "{field}=";\n')
+            impl.write(
+                f'            output += s.attr("{field}").attr("__repr__")().cast<std::string>();\n'
+            )
+        impl.write("            return output;\n")
+        impl.write("        })\n")
 
         impl.write("    ;\n")
 
@@ -186,13 +215,14 @@ def enum(name: str, prefix: str | None = None, text=includes_h):
         prefix = f"{pascal_to_snake(name).upper()}_"
     declaration = extract_declaration("enum", name, text)
     assert declaration is not None
+
     return process_enum_declaration(name, declaration, prefix)
 
 
-def options(name: str, exclude: set[str] = set()):
+def options(name: str, exclude: set[str] = set(), **kwargs):
     declaration = extract_declaration("struct", name, includes_h)
     assert declaration is not None
-    return process_options_declaration(name, declaration, exclude)
+    return process_options_declaration(name, declaration, exclude, **kwargs)
 
 
 enum("ApproximationMode", "APPROXIMATION_")
@@ -229,8 +259,12 @@ with function_declaration("void add_all_enums(pybind11::module_ &m)"):
     for enm in enums:
         impl.write(f"    add_{pascal_to_snake(enm)}_enum(m);\n")
 
+impl.write('#include "options.hh"\n')
+
+options("SortOptions")
 options("PrintOptions")
 options("ParseOptions", {"unended_function", "default_dataset"})
+options("EvaluationOptions", override_class="class PEvaluationOptions")
 
 
 def properties_for(name: str, text: str, renames: dict[str, str | None] = {}):

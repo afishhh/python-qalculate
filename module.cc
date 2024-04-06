@@ -106,58 +106,10 @@ PYBIND11_MODULE(qalculate, m) {
     DEF_COMPARISON_HELPER("might_be_not_equal", COMPARISON_MIGHT_BE_NOT_EQUAL);
   // clang-format on
 
-  add_print_options_properties(
-      py::class_<PrintOptions>(m, "PrintOptions").def(py::init()));
-
-  add_parse_options_properties(
-      py::class_<ParseOptions>(m, "ParseOptions").def(py::init()));
-
-  py::class_<PEvaluationOptions>(m, "EvaluationOptions")
-      .def(py::init())
-      .def_readwrite("approximation", &PEvaluationOptions::approximation)
-      .def_readwrite("sync_units", &PEvaluationOptions::sync_units)
-      .def_readwrite("sync_nonlinear_unit_relations",
-                     &PEvaluationOptions::sync_nonlinear_unit_relations)
-      .def_readwrite("keep_prefixes", &PEvaluationOptions::keep_prefixes)
-      .def_readwrite("calculate_variables",
-                     &PEvaluationOptions::calculate_variables)
-      .def_readwrite("calculate_functions",
-                     &PEvaluationOptions::calculate_functions)
-      .def_readwrite("test_comparisons", &PEvaluationOptions::test_comparisons)
-      .def_readwrite("isolate_x", &PEvaluationOptions::isolate_x)
-      .def_readwrite("expand", &PEvaluationOptions::expand)
-      .def_readwrite("combine_divisions",
-                     &PEvaluationOptions::combine_divisions)
-      .def_readwrite("reduce_divisions", &PEvaluationOptions::reduce_divisions)
-      .def_readwrite("allow_complex", &PEvaluationOptions::allow_complex)
-      .def_readwrite("allow_infinite", &PEvaluationOptions::allow_infinite)
-      .def_readwrite("assume_denominators_nonzero",
-                     &PEvaluationOptions::assume_denominators_nonzero)
-      .def_readwrite(
-          "warn_about_denominators_assumed_nonzero",
-          &PEvaluationOptions::warn_about_denominators_assumed_nonzero)
-      .def_readwrite("split_squares", &PEvaluationOptions::split_squares)
-      .def_readwrite("keep_zero_units", &PEvaluationOptions::keep_zero_units)
-      .def_readwrite("auto_post_conversion", // enum
-                     &PEvaluationOptions::auto_post_conversion)
-      .def_readwrite("mixed_units_conversion",                        // enum
-                     &PEvaluationOptions::mixed_units_conversion)     // enum
-      .def_readwrite("structuring", &PEvaluationOptions::structuring) // enum
-      .def_readwrite("parse_options", &PEvaluationOptions::parse_options)
-      .def_property("isolate_var", &PEvaluationOptions::get_isolate_var,
-                    &PEvaluationOptions::set_isolate_var) // enum
-      .def_readwrite("do_polynomial_division",
-                     &PEvaluationOptions::do_polynomial_division)
-      .def_readwrite("protected_function",
-                     &PEvaluationOptions::protected_function)
-      .def_readwrite("complex_number_form",
-                     &PEvaluationOptions::complex_number_form)
-      .def_readwrite("local_currency_conversion",
-                     &PEvaluationOptions::local_currency_conversion)
-      .def_readwrite("transform_trigonometric_functions",
-                     &PEvaluationOptions::transform_trigonometric_functions)
-      .def_readwrite("interval_calculation",
-                     &PEvaluationOptions::interval_calculation);
+  add_sort_options(m);
+  add_print_options(m);
+  add_parse_options(m);
+  add_evaluation_options(m);
 
 #define COMMON_ARITHMETIC_OPERATORS(other)                                     \
   .def(py::self *other)                                                        \
