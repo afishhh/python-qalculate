@@ -315,12 +315,6 @@ with function_declaration(
             f'    qalc_class_<{class_}> {name.lower()}(class_, "{snake_to_pascal(name)}", class_);\n'
         )
         impl.write(f"    {class_}::init({name.lower()});\n")
-        # impl.write(f'    {name.lower()}.def_static("__instancecheck__",\n')
-        # impl.write(
-        #     f"        [](MathStructure *s) {{ return s->type() == STRUCT_{name}; }},\n"
-        # )
-        # impl.write(f"        py::is_operator{{}}\n")
-        # impl.write(f"    );\n")
 
     impl.write("    return class_;\n")
 
