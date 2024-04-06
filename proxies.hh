@@ -139,9 +139,9 @@ public:
 
   static void init(qalc_class_<MathStructureComparisonProxy> &c) {
     c.def(py::init<MathStructure *, ComparisonType, MathStructure *>(),
-          py::arg("left") = nullptr,
+          py::arg("left") = static_cast<MathStructure*>(nullptr),
           py::arg("type") = ComparisonType::COMPARISON_EQUALS,
-          py::arg("right") = nullptr) PROXY_CHILD_ACCESSOR("left", 0)
+          py::arg("right") = static_cast<MathStructure*>(nullptr)) PROXY_CHILD_ACCESSOR("left", 0)
         PROXY_CHILD_ACCESSOR("right", 1)
             .def_property("comparisonType", &MathStructure::comparisonType,
                           &MathStructure::setComparisonType);
@@ -166,7 +166,7 @@ public:
 
   static void init(qalc_class_<MathStructurePowerProxy> &c) {
     c.def(py::init<MathStructure *, MathStructure *>(),
-          py::arg("base") = nullptr, py::arg("exponent") = nullptr)
+          py::arg("base") = static_cast<MathStructure*>(nullptr), py::arg("exponent") = static_cast<MathStructure*>(nullptr))
         PROXY_CHILD_ACCESSOR("base", 0) PROXY_CHILD_ACCESSOR("exponent", 1);
   }
 };
