@@ -78,7 +78,7 @@ function(build_binary_wheel)
 
 	add_custom_command(
 		OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${WHEEL_FILESTEM}.whl"
-		COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/cmake/write_wheel_record.py" "${UNPACKED_WHEEL_DIR}"
+		COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/cmake/write_wheel_record.py" "${UNPACKED_WHEEL_DIR}"
 		COMMAND zip -u -r -9 "../${WHEEL_FILESTEM}.whl" .
 		WORKING_DIRECTORY "${UNPACKED_WHEEL_DIR}"
 		DEPENDS "${ARG_TARGET}"
