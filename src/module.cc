@@ -158,13 +158,6 @@ PYBIND11_MODULE(qalculate, m) {
 
   add_math_structure_proxies(add_math_structure_properties(
       qalc_class_<MathStructure>(m, "MathStructure")
-          .def(py::init([]() {
-            throw std::runtime_error(
-                "MathStructure is an abstract type, construct specific "
-                "subclasses directly instead.");
-            return MathStructureRef::construct();
-          }))
-
           .def_property_readonly("children",
                                  [](MathStructure *self) {
                                    return ChildrenList(MathStructureRef(self));
@@ -177,22 +170,14 @@ PYBIND11_MODULE(qalculate, m) {
           .COMMON_ARITHMETIC_OPERATORS(Number())
           .COMMON_ARITHMETIC_OPERATORS(std::string())
 
-          // .def(
-          //     "__repr__",
-          //     [](MathStructure const &self) {
-          //       std::string result = "MathStructure(\"";
-          //       for (auto x : self.print(PrintOptions())) {
-          //         if (x == '\"')
-          //           result += "\\\"";
-          //         else if (x == '\\')
-          //           result += "\\\\";
-          //         else
-          //           result += x;
-          //       }
-          //       result += "\")";
-          //       return result;
-          //     },
-          //     py::is_operator{})
+          .def(
+              "__repr__",
+              [](MathStructure const *self) {
+                std::string output;
+                MathStructure_repr(self, output);
+                return output;
+              },
+              py::is_operator{})
 
           .def("compare", &MathStructure::compare)
           .def("compare_approximately", &MathStructure::compareApproximately)

@@ -56,6 +56,7 @@ impl = IndentedWriter((output_directory / "generated.cc").open("w+"))
 
 header.write(
     """
+#pragma once
 #include "proxies.hh"
 #include <pybind11/operators.h>
 #include <pybind11/pybind11.h>
@@ -161,12 +162,14 @@ def process_options_declaration(
                 impl.write(f"return result;\n")
             impl.write("}), py::kw_only{}")
             for field, type in options:
-                impl.write(f', py::arg("{field}") = default_{pascal_to_snake(name)}.{field}')
+                impl.write(
+                    f', py::arg("{field}") = default_{pascal_to_snake(name)}.{field}'
+                )
             impl.write(")\n")
 
             with impl.indent(f'.def("__repr__", [](py::object s) {{\n'):
                 impl.write(f'std::string output = "{name}(";\n')
-                impl.write(f'output.reserve(512);\n')
+                impl.write(f"output.reserve(512);\n")
                 for i, (field, type) in enumerate(options):
                     if i != 0:
                         impl.write(f'output += ", ";\n')
@@ -310,6 +313,17 @@ properties_for(
 )
 
 impl.write('#include "proxies.hh"\n')
+
+with function_declaration(
+    "void MathStructure_repr(MathStructure const *mstruct, std::string &output)"
+):
+    with impl.indent("switch(mstruct->type()) {\n"):
+        for name in structure_types:
+            impl.write(f"case STRUCT_{name}:\n")
+            class_ = f"MathStructure{snake_to_pascal(name)}Proxy"
+            impl.write(f"(({class_} const*)mstruct)->repr(output);\n")
+            impl.write(f"break;\n")
+    impl.write("}\n")
 
 with function_declaration(
     f"{MATH_STRUCTURE_CLASS}& add_math_structure_proxies({MATH_STRUCTURE_CLASS}& class_)"
