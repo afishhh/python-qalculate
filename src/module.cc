@@ -157,7 +157,7 @@ PYBIND11_MODULE(qalculate, m) {
       .def("__len__", &ChildrenList::size, py::is_operator{});
 
   add_math_structure_proxies(add_math_structure_properties(
-      qalc_class_<MathStructure>(m, "MathStructure")
+      qalc_class_<MathStructure>(m, "MathStructure", py::is_final{})
           .def_property_readonly("children",
                                  [](MathStructure *self) {
                                    return ChildrenList(MathStructureRef(self));
