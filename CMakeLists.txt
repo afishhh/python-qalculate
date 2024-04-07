@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.18...3.22)
-project(python-qalculate LANGUAGES CXX)
+project(
+	python-qalculate
+	LANGUAGES CXX
+	VERSION 0.0.1
+)
+
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/BuildWheel.cmake")
 
 find_package(
 	Python 3.6
@@ -63,13 +69,11 @@ set_target_properties(
 add_custom_command(
 	TARGET python-qalculate
 	POST_BUILD
-	COMMAND "cp" "qalculate.cpython-311-x86_64-linux-gnu.so" /tmp
-	BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/qalculate.pyi"
-)
-
-add_custom_command(
-	TARGET python-qalculate
-	POST_BUILD
 	COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/generate_stubs.sh" "${CMAKE_CURRENT_BINARY_DIR}"
 	BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/qalculate.pyi"
+	VERBATIM
+)
+
+build_binary_wheel(
+	TARGET python-qalculate
 )
