@@ -3,19 +3,17 @@ import string
 import re
 from contextlib import contextmanager
 import sys
+from .utils import IndentedWriter
 
 libqalculate_src = Path(sys.argv[1]) / "libqalculate"
 output_directory = Path(sys.argv[2])
 output_directory.mkdir(exist_ok=True)
-header = (output_directory / "generated.hh").open("w+")
-impl = (output_directory / "generated.cc").open("w+")
 
 includes_h = (libqalculate_src / "includes.h").read_text()
 number_h = (libqalculate_src / "Number.h").read_text()
 calculator_h = (libqalculate_src / "Calculator.h").read_text()
 math_structure_h = (libqalculate_src / "MathStructure.h").read_text()
 
-header.write('#include "proxies.hh"\n')
 MATH_STRUCTURE_CLASS = "qalc_class_<MathStructure>"
 
 
@@ -53,12 +51,16 @@ def clean(text: str) -> str:
     return text
 
 
+header = IndentedWriter((output_directory / "generated.hh").open("w+"))
+impl = IndentedWriter((output_directory / "generated.cc").open("w+"))
+
 header.write(
-    """#include <pybind11/operators.h>
+    """
+#include "proxies.hh"
+#include <pybind11/operators.h>
 #include <pybind11/pybind11.h>
 #include <libqalculate/qalculate.h>
 #include "ref.hh"
-
 """
 )
 
@@ -69,7 +71,9 @@ impl.write('#include "generated.hh"\n\n')
 def function_declaration(signature: str):
     header.write(f"{signature};\n")
     impl.write(f"{signature} {{\n")
+    impl.indent()
     yield
+    impl.dedent()
     impl.write(f"}}\n")
 
 
@@ -85,17 +89,15 @@ def process_simple_properties(
     with function_declaration(
         f"{class_type} &add_{pascal_to_snake(name)}_properties({class_type} &class_)"
     ):
-        impl.write("    return class_\n")
-        for line in text.splitlines()[1:-1]:
-            if match := PROPERTY_REGEX.match(line.strip()):
-                _, prop = match.groups()
-                mapped = renames.get(prop, camel_to_snake(prop))
-                if mapped is None:
-                    continue
-                impl.write(
-                    f'        .def_property_readonly("{mapped}", &{name}::{prop})\n'
-                )
-        impl.write("    ;\n")
+        with impl.indent("return class_\n"):
+            for line in text.splitlines()[1:-1]:
+                if match := PROPERTY_REGEX.match(line.strip()):
+                    _, prop = match.groups()
+                    mapped = renames.get(prop, camel_to_snake(prop))
+                    if mapped is None:
+                        continue
+                    impl.write(f'.def_property_readonly("{mapped}", &{name}::{prop})\n')
+        impl.write(";\n")
 
 
 def find_end_of_block(text: str, start: int = 0, level: int = 0) -> int:
@@ -134,47 +136,47 @@ def process_options_declaration(
     with function_declaration(
         f"void add_{pascal_to_snake(name)}(pybind11::module_ &m)"
     ):
-        impl.write(f'    pybind11::class_<{override_class or name}>(m, "{name}")\n')
-        options = {}
-        for line in declarations:
-            if match := field_regex.match(line.strip()):
-                type, field = match.groups()
-                if field in exclude:
-                    continue
-                impl.write(
-                    f'        .def_readwrite("{camel_to_snake(field)}", &{name}::{field})\n'
-                )
-                options[field] = type
+        with impl.indent(f'pybind11::class_<{override_class or name}>(m, "{name}")\n'):
+            options = {}
+            for line in declarations:
+                if match := field_regex.match(line.strip()):
+                    type, field = match.groups()
+                    if field in exclude:
+                        continue
+                    impl.write(
+                        f'.def_readwrite("{camel_to_snake(field)}", &{name}::{field})\n'
+                    )
+                    options[field] = type
 
-        impl.write("        .def(py::init([](")
-        options = list(options.items())
-        for i, (field, type) in enumerate(options):
-            if i > 0:
-                impl.write(",")
-            impl.write(f"{type} {field}")
-        impl.write("){")
-        impl.write(f"{name} result;")
-        for field, type in options:
-            impl.write(f"result.{field}={field};")
-        impl.write(f"return result;")
-        impl.write("}),py::kw_only{}")
-        for field, type in options:
-            impl.write(f',py::arg("{field}") = default_{pascal_to_snake(name)}.{field}')
-        impl.write(")\n")
+            impl.write(".def(py::init([](")
+            options = list(options.items())
+            for i, (field, type) in enumerate(options):
+                if i > 0:
+                    impl.write(", ")
+                impl.write(f"{type} {field}")
+            with impl.indent(") {\n"):
+                impl.write(f"{name} result;\n")
+                for field, type in options:
+                    impl.write(f"result.{field} = {field};\n")
+                impl.write(f"return result;\n")
+            impl.write("}), py::kw_only{}")
+            for field, type in options:
+                impl.write(f', py::arg("{field}") = default_{pascal_to_snake(name)}.{field}')
+            impl.write(")\n")
 
-        impl.write(f'        .def("__repr__", [](py::object s) {{\n')
-        impl.write(f'            std::string output = "{name}(";\n')
-        for i, (field, type) in enumerate(options):
-            if i != 0:
-                impl.write(f'            output += ", ";\n')
-            impl.write(f'            output += "{field}=";\n')
-            impl.write(
-                f'            output += s.attr("{field}").attr("__repr__")().cast<std::string>();\n'
-            )
-        impl.write("            return output;\n")
-        impl.write("        })\n")
-
-        impl.write("    ;\n")
+            with impl.indent(f'.def("__repr__", [](py::object s) {{\n'):
+                impl.write(f'std::string output = "{name}(";\n')
+                impl.write(f'output.reserve(512);\n')
+                for i, (field, type) in enumerate(options):
+                    if i != 0:
+                        impl.write(f'output += ", ";\n')
+                    impl.write(f'output += "{field}=";\n')
+                    impl.write(
+                        f'output += s.attr("{field}").attr("__repr__")().cast<std::string>();\n'
+                    )
+                impl.write("return output;\n")
+            impl.write("})\n")
+        impl.write(";\n")
 
 
 def process_enum_declaration(name: str, text: str, prefix: str):
@@ -183,28 +185,28 @@ def process_enum_declaration(name: str, text: str, prefix: str):
     with function_declaration(
         f"pybind11::enum_<{name}> add_{pascal_to_snake(name)}_enum(pybind11::module_ &m)"
     ):
-        impl.write(f'    return pybind11::enum_<{name}>(m, "{name}")\n')
-        doc_comment = None
-        for line in declarations:
-            line = line.strip()
-            if line.startswith("//"):
-                if doc_comment is None:
-                    doc_comment = ""
+        with impl.indent(f'return pybind11::enum_<{name}>(m, "{name}")\n'):
+            doc_comment = None
+            for line in declarations:
+                line = line.strip()
+                if line.startswith("//"):
+                    if doc_comment is None:
+                        doc_comment = ""
+                    else:
+                        doc_comment += "\n"
+                    doc_comment += line.removeprefix("///").strip()
                 else:
-                    doc_comment += "\n"
-                doc_comment += line.removeprefix("///").strip()
-            else:
-                value = line.removesuffix(",")
-                doc_arg = (
-                    (', "' + doc_comment.replace('"', '\\"') + '"')
-                    if doc_comment is not None
-                    else ""
-                )
-                impl.write(
-                    f'        .value("{value.removeprefix(prefix)}", {name}::{value}{doc_arg})\n'
-                )
-                doc_comment = None
-        impl.write("    ;\n")
+                    value = line.removesuffix(",")
+                    doc_arg = (
+                        (', "' + doc_comment.replace('"', '\\"') + '"')
+                        if doc_comment is not None
+                        else ""
+                    )
+                    impl.write(
+                        f'.value("{value.removeprefix(prefix)}", {name}::{value}{doc_arg})\n'
+                    )
+                    doc_comment = None
+        impl.write(";\n")
 
 
 enums: list[str] = []
@@ -258,7 +260,7 @@ enum("AutomaticApproximation", "AUTOMATIC_APPROXIMATION_", calculator_h)
 enums.remove("ComparisonResult")
 with function_declaration("void add_all_enums(pybind11::module_ &m)"):
     for enm in enums:
-        impl.write(f"    add_{pascal_to_snake(enm)}_enum(m);\n")
+        impl.write(f"add_{pascal_to_snake(enm)}_enum(m);\n")
 
 impl.write('#include "options.hh"\n')
 
@@ -315,33 +317,32 @@ with function_declaration(
     for name in structure_types:
         class_ = f"MathStructure{snake_to_pascal(name)}Proxy"
         impl.write(
-            f'    qalc_class_<{class_}> {name.lower()}(class_, "{snake_to_pascal(name)}", class_);\n'
+            f'qalc_class_<{class_}> {name.lower()}(class_, "{snake_to_pascal(name)}", class_);\n'
         )
-        impl.write(f"    {class_}::init({name.lower()});\n")
+        impl.write(f"{class_}::init({name.lower()});\n")
 
-    impl.write("    return class_;\n")
+    impl.write("return class_;\n")
 
 
 header.write("namespace PYBIND11_NAMESPACE {\n")
-header.write("template <> struct polymorphic_type_hook<MathStructure> {\n")
-header.write(
-    "    static void const *get(MathStructure const *src, std::type_info const *&type) {\n"
-)
-header.write("        if(src == nullptr) return nullptr;\n")
-header.write("        switch(src->type()) {\n")
-for name in structure_types:
-    class_ = f"MathStructure{snake_to_pascal(name)}Proxy"
-    header.write(f"        case STRUCT_{name}:\n")
-    header.write(f"            type = &typeid({class_});\n")
-    header.write(f"            return static_cast<{class_} const *>(src);\n")
-header.write(f"        default:\n")
-header.write(
-    '             throw std::runtime_error("No proxy object for MathStructure type " + std::to_string(src->type()));\n'
-)
-header.write("         }\n")
-header.write("    }\n")
-header.write("};\n")
-header.write("}\n")
+with header.indent("template <> struct polymorphic_type_hook<MathStructure> {\n"):
+    with header.indent(
+        "static void const *get(MathStructure const *src, std::type_info const *&type) {\n"
+    ):
+        header.write("if(src == nullptr) return nullptr;\n")
+        header.write("switch(src->type()) {\n")
+        for name in structure_types:
+            class_ = f"MathStructure{snake_to_pascal(name)}Proxy"
+            with header.indent(f"case STRUCT_{name}:\n"):
+                header.write(f"type = &typeid({class_});\n")
+                header.write(f"return static_cast<{class_} const *>(src);\n")
+        with header.indent(f"default:\n"):
+            header.write(
+                'throw std::runtime_error("No proxy object for MathStructure type " + std::to_string(src->type()));\n'
+            )
+        header.write("}\n")
+    header.write("}\n")
+header.write("};\n}\n")
 
 header.close()
 impl.close()
