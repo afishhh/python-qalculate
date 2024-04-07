@@ -10,13 +10,27 @@ find_package(pybind11 CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBQALCULATE REQUIRED libqalculate)
 
-execute_process(
-	COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/generate.sh" "${CMAKE_CURRENT_BINARY_DIR}/libqalculate-src" "${CMAKE_CURRENT_BINARY_DIR}/generated"
-	WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-	COMMAND_ERROR_IS_FATAL ANY
-)
+file(GLOB GENERATOR_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/generate/*.py")
+set(GENERATED_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
-file(GLOB SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc" "${CMAKE_CURRENT_BINARY_DIR}/generated/*.cc")
+set(REGENERATE OFF)
+foreach(SOURCE_FILE ${GENERATOR_SOURCES})
+	if("${SOURCE_FILE}" IS_NEWER_THAN "${CMAKE_CURRENT_BINARY_DIR}/generated-timestamp")
+		set(REGENERATE ON)
+		break()
+	endif()
+endforeach()
+
+if(${REGENERATE})
+	execute_process(
+		COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/generate.sh" "${CMAKE_CURRENT_BINARY_DIR}/libqalculate-src" "${GENERATED_SOURCE_DIR}"
+		WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+		COMMAND_ERROR_IS_FATAL ANY
+	)
+	file(TOUCH "${CMAKE_CURRENT_BINARY_DIR}/generated-timestamp")
+endif()
+
+file(GLOB SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc" "${GENERATED_SOURCE_DIR}/*.cc")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,7 +51,7 @@ target_include_directories(
 	python-qalculate
 	PRIVATE
 	"${CMAKE_CURRENT_SOURCE_DIR}/src"
-	"${CMAKE_CURRENT_BINARY_DIR}/generated"
+	"${GENERATED_SOURCE_DIR}"
 )
 
 set_target_properties(
