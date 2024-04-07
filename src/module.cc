@@ -111,7 +111,7 @@ PYBIND11_MODULE(qalculate, m) {
   add_evaluation_options(m);
 
 #define COMMON_ARITHMETIC_OPERATORS(other)                                     \
-  .def(py::self *other)                                                        \
+  def(py::self *other)                                                         \
       .def(py::self *= other)                                                  \
       .def(py::self / other)                                                   \
       .def(decltype(py::self)() /= other)                                      \
@@ -139,7 +139,7 @@ PYBIND11_MODULE(qalculate, m) {
               "__str__", [](Number const &self) { return self.print(); },
               py::is_operator())
 
-              COMMON_ARITHMETIC_OPERATORS(py::self)
+          .COMMON_ARITHMETIC_OPERATORS(py::self)
 
           .def(-py::self)
           .def(!py::self)
@@ -173,8 +173,9 @@ PYBIND11_MODULE(qalculate, m) {
           .def(-py::self)
           .def(!py::self)
 
-              COMMON_ARITHMETIC_OPERATORS(py::self)
-                  COMMON_ARITHMETIC_OPERATORS(Number())
+          .COMMON_ARITHMETIC_OPERATORS(py::self)
+          .COMMON_ARITHMETIC_OPERATORS(Number())
+          .COMMON_ARITHMETIC_OPERATORS(std::string())
 
           // .def(
           //     "__repr__",
