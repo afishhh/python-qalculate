@@ -76,4 +76,5 @@ add_custom_command(
 
 build_binary_wheel(
 	TARGET python-qalculate
+	STUBS "${CMAKE_CURRENT_BINARY_DIR}/qalculate.pyi"
 )

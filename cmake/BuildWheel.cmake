@@ -1,9 +1,10 @@
 function(build_binary_wheel)
+	set(ONE_VALUE_ARGS TARGET STUBS)
 	cmake_parse_arguments(
 		PARSE_ARGV 0
 		ARG
 		""
-		"TARGET"
+		"${ONE_VALUE_ARGS}"
 		""
 	)
 
@@ -42,17 +43,19 @@ function(build_binary_wheel)
 		"${CMAKE_CURRENT_BINARY_DIR}/${WHEEL_FILESTEM}"
 	)
 
-	file(
-		MAKE_DIRECTORY
-		${UNPACKED_WHEEL_DIR}
-	)
+	file(MAKE_DIRECTORY ${UNPACKED_WHEEL_DIR})
 
 	set(DISTINFO_DIR "${UNPACKED_WHEEL_DIR}/${T_NAME}-${CMAKE_PROJECT_VERSION}.dist-info")
+	set(DATA_DIR "${UNPACKED_WHEEL_DIR}/${T_NAME}")
 
-	file(
-		MAKE_DIRECTORY
-		"${DISTINFO_DIR}"
-	)
+	if(DEFINED ARG_STUBS)
+		file(MAKE_DIRECTORY "${DATA_DIR}")
+
+		file(TOUCH "${DATA_DIR}/py.typed")
+		file(CREATE_LINK "${ARG_STUBS}" "${DATA_DIR}/__init__.pyi" SYMBOLIC)
+	endif()
+
+	file(MAKE_DIRECTORY "${DISTINFO_DIR}")
 
 	string(APPEND METADATA "Metadata-Version: 2.1\n")
 	string(APPEND METADATA "Name: ${T_NAME}\n")
