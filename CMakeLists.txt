@@ -104,7 +104,9 @@ set_target_properties(
 add_custom_command(
 	TARGET python-qalculate
 	POST_BUILD
-	COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/generate_stubs.sh" "${CMAKE_CURRENT_BINARY_DIR}"
+	COMMAND
+		"${CMAKE_COMMAND}" -E env "PYTHONPATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{PYTHONPATH}"
+		pybind11-stubgen -o "${CMAKE_CURRENT_BINARY_DIR}" qalculate --enum-class-locations ".*:qalculate"
 	BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/qalculate.pyi"
 	VERBATIM
 )
