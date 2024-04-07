@@ -6,7 +6,9 @@
 , ...
 }:
 
-pkgs.stdenv.mkDerivation {
+# FIXME: AFAIK this is still not really a viable python package
+#        I think this has to be built for specific python versions instead?
+pkgs.stdenv.mkDerivation (self: {
   pname = "qalculate";
   version = "0.0.1";
 
@@ -46,9 +48,12 @@ pkgs.stdenv.mkDerivation {
     }))
   ];
 
+  cmakeFlags = [
+    "-DLIBQALCULATE_SOURCE_PATH=${libqalculate.src}"
+  ];
+
   installPhase = ''
     mkdir -p "$out/lib/python3.11"
-    ls
-    cp -r ./build/qalculate-0.0.1-cp311-cp311-linux_x86_64 "$out/lib/python3.11/site-packages"
+    cp -Lr qalculate-${self.version}-cp311-cp311-linux_x86_64 "$out/lib/python3.11/site-packages"
   '';
-}
+})
