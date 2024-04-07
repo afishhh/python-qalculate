@@ -5,13 +5,14 @@ from contextlib import contextmanager
 import sys
 
 libqalculate_src = Path(sys.argv[1]) / "libqalculate"
-
-header = Path("./generated.hh").open("w+")
-impl = Path("./generated.cc").open("w+")
+output_directory = Path(sys.argv[2])
+output_directory.mkdir(exist_ok=True)
+header = (output_directory / "generated.hh").open("w+")
+impl = (output_directory / "generated.cc").open("w+")
 
 includes_h = (libqalculate_src / "includes.h").read_text()
 number_h = (libqalculate_src / "Number.h").read_text()
-calculator_h = (libqalculate_src /  "Calculator.h").read_text()
+calculator_h = (libqalculate_src / "Calculator.h").read_text()
 math_structure_h = (libqalculate_src / "MathStructure.h").read_text()
 
 header.write('#include "proxies.hh"\n')
@@ -296,6 +297,8 @@ properties_for(
         "countChildren": None,
         "refcount": None,
         "isAborted": None,
+        "rows": None,
+        "size": None,
         "type": None,
         "comparisonType": None,
         # Remove type-specific checks (use instanceof instead)
@@ -339,3 +342,6 @@ header.write("         }\n")
 header.write("    }\n")
 header.write("};\n")
 header.write("}\n")
+
+header.close()
+impl.close()

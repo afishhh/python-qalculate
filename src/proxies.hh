@@ -78,7 +78,7 @@ public:
 template <size_t MIN_ITEMS>
 class MathStructureGenericOperationProxy : public MathStructure {
 protected:
-  template <std::derived_from<MathStructureGenericOperationProxy> T>
+  template <typename T>
   static void init(qalc_class_<T> &c) {
     c.def(py::init<py::typing::List<MathStructure>>(), py::arg("children") = py::list());
   }

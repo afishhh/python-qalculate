@@ -68,12 +68,11 @@ public:
 };
 
 MathStructureRef calculate(MathStructure const &mstruct,
-                           PEvaluationOptions const &options,
-                           std::string to_str) {
+                           PEvaluationOptions const &options, std::string to) {
   MathStructure result;
   {
     py::gil_scoped_release _gil;
-    result = CALCULATOR->calculate(mstruct, options, to_str);
+    result = CALCULATOR->calculate(mstruct, options, to);
   }
   return MathStructureRef::adopt(result);
 }
@@ -208,7 +207,7 @@ PYBIND11_MODULE(qalculate, m) {
           .def("calculate", &calculate,
                py::arg("options") =
                    PEvaluationOptions(default_evaluation_options),
-               py::arg("to_str") = "")
+               py::arg("to") = "")
 
           .def(
               "print",
@@ -229,7 +228,7 @@ PYBIND11_MODULE(qalculate, m) {
 
   m.def("calculate", &calculate, py::arg("mstruct"), py::pos_only{},
         py::arg("options") = PEvaluationOptions(default_evaluation_options),
-        py::arg("to_str") = "");
+        py::arg("to") = "");
 
   m.def(
       "calculate",
