@@ -74,12 +74,16 @@ function(build_binary_wheel)
 	file(CREATE_LINK "${CMAKE_CURRENT_BINARY_DIR}/${EXTLIBNAME}" "${UNPACKED_WHEEL_DIR}/${EXTLIBNAME}" SYMBOLIC)
 
 	add_custom_command(
-		TARGET python-qalculate
-		POST_BUILD
+		OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${WHEEL_FILESTEM}.whl"
 		COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/cmake/write_wheel_record.py" "${UNPACKED_WHEEL_DIR}"
 		COMMAND zip -u -r -9 "../${WHEEL_FILESTEM}.whl" .
 		WORKING_DIRECTORY "${UNPACKED_WHEEL_DIR}"
-		BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${WHEEL_FILESTEM}.whl"
+		DEPENDS "${ARG_TARGET}"
 		VERBATIM
+	)
+
+	add_custom_target(
+		"${ARG_TARGET}-wheel" ALL
+		DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${WHEEL_FILESTEM}.whl"
 	)
 endfunction()
