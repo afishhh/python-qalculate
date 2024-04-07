@@ -14,6 +14,9 @@ pkgs.stdenv.mkDerivation {
 
   nativeBuildInputs = with pkgs; [
     pkg-config
+    cmake
+    python3
+
     (pkgs.python3Packages.buildPythonApplication {
       pname = "pybind11-stubgen";
       version = "2.5.1";
@@ -42,4 +45,10 @@ pkgs.stdenv.mkDerivation {
       };
     }))
   ];
+
+  installPhase = ''
+    mkdir -p "$out/lib/python3.11"
+    ls
+    cp -r ./build/qalculate-0.0.1-cp311-cp311-linux_x86_64 "$out/lib/python3.11/site-packages"
+  '';
 }
