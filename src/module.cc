@@ -9,11 +9,10 @@
 #include <pybind11/stl.h>
 #include <string_view>
 
-namespace py = pybind11;
-
 #include "generated.hh"
 #include "options.hh"
 #include "proxies.hh"
+#include "pybind.hh"
 #include "ref.hh"
 
 Number number_from_python_int(py::int_ value) {
