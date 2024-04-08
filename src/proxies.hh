@@ -180,7 +180,7 @@ public:
     MathStructure_repr(&(*this)[0], output);
     output += ", type=";
     output +=
-        ((py::object)py::cast(this)).attr("__repr__")().cast<std::string>();
+        ((py::object)py::cast(this->comparisonType())).attr("__repr__")().cast<std::string>();
     output += ", right=";
     MathStructure_repr(&(*this)[1], output);
     output += ")";
