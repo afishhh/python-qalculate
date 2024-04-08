@@ -97,6 +97,7 @@ public:
       throw py::value_error("At least " + std::to_string(MIN_ITEMS) +
                             " are requried for this node");
 
+    m_type = Self::TYPE;
     for (auto value : list) {
       auto structure = value.cast<MathStructureRef>();
       PROXY_APPEND_CHILD(structure);
@@ -115,19 +116,20 @@ public:
   }
 };
 
-#define GENERIC_OPERATION_PROXY1(proxy, name, nitems)                          \
+#define GENERIC_OPERATION_PROXY1(proxy, type, name, nitems)                    \
   class proxy final                                                            \
       : public MathStructureGenericOperationProxy<nitems, proxy> {             \
   public:                                                                      \
     static constexpr std::string_view PYTHON_NAME = name;                      \
+    static constexpr StructureType TYPE = type;                                \
     static void init(qalc_class_<proxy> &c) {                                  \
       MathStructureGenericOperationProxy::init(c);                             \
     }                                                                          \
   }
 
-#define GENERIC_OPERATION_PROXY(name, nitems)                                  \
-  GENERIC_OPERATION_PROXY1(MathStructure##name##Proxy, "MathStructure." #name, \
-                           nitems)
+#define GENERIC_OPERATION_PROXY(name, type, nitems)                            \
+  GENERIC_OPERATION_PROXY1(MathStructure##name##Proxy, type,                   \
+                           "MathStructure." #name, nitems)
 
 #define STUB_PROXY(name)                                                       \
   class MathStructure##name##Proxy final : public MathStructure {              \
@@ -138,18 +140,18 @@ public:
     }                                                                          \
   }
 
-GENERIC_OPERATION_PROXY(Multiplication, 0);
-GENERIC_OPERATION_PROXY(Addition, 0);
+GENERIC_OPERATION_PROXY(Multiplication, STRUCT_MULTIPLICATION, 0);
+GENERIC_OPERATION_PROXY(Addition, STRUCT_ADDITION, 0);
 
-GENERIC_OPERATION_PROXY(BitwiseAnd, 0);
-GENERIC_OPERATION_PROXY(BitwiseOr, 0);
-GENERIC_OPERATION_PROXY(BitwiseXor, 0);
-GENERIC_OPERATION_PROXY(BitwiseNot, 0);
+GENERIC_OPERATION_PROXY(BitwiseAnd, STRUCT_BITWISE_AND, 0);
+GENERIC_OPERATION_PROXY(BitwiseOr, STRUCT_BITWISE_OR, 0);
+GENERIC_OPERATION_PROXY(BitwiseXor, STRUCT_BITWISE_XOR, 0);
+GENERIC_OPERATION_PROXY(BitwiseNot, STRUCT_BITWISE_NOT, 0);
 
-GENERIC_OPERATION_PROXY(LogicalAnd, 0);
-GENERIC_OPERATION_PROXY(LogicalOr, 0);
-GENERIC_OPERATION_PROXY(LogicalXor, 0);
-GENERIC_OPERATION_PROXY(LogicalNot, 0);
+GENERIC_OPERATION_PROXY(LogicalAnd, STRUCT_LOGICAL_AND, 0);
+GENERIC_OPERATION_PROXY(LogicalOr, STRUCT_LOGICAL_OR, 0);
+GENERIC_OPERATION_PROXY(LogicalXor, STRUCT_LOGICAL_XOR, 0);
+GENERIC_OPERATION_PROXY(LogicalNot, STRUCT_LOGICAL_NOT, 0);
 
 class MathStructureComparisonProxy : public MathStructure {
 public:
