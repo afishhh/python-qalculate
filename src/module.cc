@@ -110,21 +110,6 @@ PYBIND11_MODULE(qalculate, m) {
   add_parse_options(m);
   add_evaluation_options(m);
 
-#define COMMON_ARITHMETIC_OPERATORS(other)                                     \
-  def(py::self *other)                                                         \
-      .def(py::self *= other)                                                  \
-      .def(py::self / other)                                                   \
-      .def(decltype(py::self)() /= other)                                      \
-      .def(py::self + other)                                                   \
-      .def(py::self += other)                                                  \
-      .def(py::self - other)                                                   \
-      .def(decltype(py::self)() -= other)                                      \
-      .def(py::self ^ other)                                                   \
-      .def(decltype(py::self)() ^= other)                                      \
-                                                                               \
-      .def(py::self == other)                                                  \
-      .def(py::self != other)
-
   auto number = add_number_properties(
       py::class_<Number>(m, "Number")
           .def(py::init<>())
@@ -139,10 +124,21 @@ PYBIND11_MODULE(qalculate, m) {
               "__str__", [](Number const &self) { return self.print(); },
               py::is_operator())
 
-          .COMMON_ARITHMETIC_OPERATORS(py::self)
-
           .def(-py::self)
-          .def(!py::self)
+
+          .def(py::self * py::self)
+          .def(py::self *= py::self)
+          .def(py::self / py::self)
+          .def(decltype(py::self)() /= py::self)
+          .def(py::self + py::self)
+          .def(py::self += py::self)
+          .def(py::self - py::self)
+          .def(decltype(py::self)() -= py::self)
+          .def(py::self ^ py::self)
+          .def(decltype(py::self)() ^= py::self)
+
+          .def(py::self == py::self)
+          .def(py::self != py::self)
           .def(py::self < py::self)
           .def(py::self <= py::self)
           .def(py::self > py::self)
@@ -156,51 +152,47 @@ PYBIND11_MODULE(qalculate, m) {
       .def("__getitem__", &ChildrenList::get_item, py::is_operator{})
       .def("__len__", &ChildrenList::size, py::is_operator{});
 
-  add_math_structure_proxies(add_math_structure_properties(
-      qalc_class_<MathStructure>(m, "MathStructure", py::is_final{})
-          .def_property_readonly("children",
-                                 [](MathStructure *self) {
-                                   return ChildrenList(MathStructureRef(self));
-                                 })
+  add_math_structure_operators(add_math_structure_proxies(
+      add_math_structure_properties(
+          qalc_class_<MathStructure>(m, "MathStructure", py::is_final{})
+              .def_property_readonly("children",
+                                     [](MathStructure *self) {
+                                       return ChildrenList(
+                                           MathStructureRef(self));
+                                     })
 
-          .def(-py::self)
-          .def(!py::self)
+              .def(
+                  "__repr__",
+                  [](MathStructure const *self) {
+                    std::string output;
+                    MathStructure_repr(self, output);
+                    return output;
+                  },
+                  py::is_operator{})
 
-          .COMMON_ARITHMETIC_OPERATORS(py::self)
-          .COMMON_ARITHMETIC_OPERATORS(Number())
-          .COMMON_ARITHMETIC_OPERATORS(std::string())
+              .def("compare", &MathStructure::compare)
+              .def("compare_approximately",
+                   &MathStructure::compareApproximately)
 
-          .def(
-              "__repr__",
-              [](MathStructure const *self) {
-                std::string output;
-                MathStructure_repr(self, output);
-                return output;
-              },
-              py::is_operator{})
+              .def_static(
+                  "parse",
+                  [](std::string_view s) {
+                    return MathStructureRef::adopt(
+                        CALCULATOR->parse(std::string(s)));
+                  },
+                  py::arg("value"), py::pos_only{})
 
-          .def("compare", &MathStructure::compare)
-          .def("compare_approximately", &MathStructure::compareApproximately)
+              .def("calculate", &calculate,
+                   py::arg("options") =
+                       PEvaluationOptions(default_evaluation_options),
+                   py::arg("to") = "")
 
-          .def_static(
-              "parse",
-              [](std::string_view s) {
-                return MathStructureRef::adopt(
-                    CALCULATOR->parse(std::string(s)));
-              },
-              py::arg("value"), py::pos_only{})
-
-          .def("calculate", &calculate,
-               py::arg("options") =
-                   PEvaluationOptions(default_evaluation_options),
-               py::arg("to") = "")
-
-          .def(
-              "print",
-              [](MathStructure &s, PrintOptions const &options) {
-                return s.print(options);
-              },
-              py::arg("options") = default_print_options)));
+              .def(
+                  "print",
+                  [](MathStructure &s, PrintOptions const &options) {
+                    return s.print(options);
+                  },
+                  py::arg("options") = default_print_options))));
 
   number.def(py::init([](MathStructureNumberProxy const &structure) {
     return structure.number();

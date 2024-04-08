@@ -312,6 +312,48 @@ properties_for(
     },
 )
 
+
+math_structure_operators = [
+    ("*", "__mul__"),
+    ("*=", "__imul__"),
+    ("/", "__truediv__"),
+    ("/=", "__itruediv__"),
+    ("+", "__add__"),
+    ("+=", "__iadd__"),
+    ("-", "__sub__"),
+    ("-=", "__isub__"),
+    ("^", "__xor__"),
+    ("^=", "__ixor__"),
+    ("==", "__eq__"),
+]
+
+with function_declaration(
+    f"{MATH_STRUCTURE_CLASS} &add_math_structure_operators({MATH_STRUCTURE_CLASS} &class_)"
+):
+    with impl.indent("return class_"):
+        for cpp_op, py_op in math_structure_operators:
+            # Non-copying operator
+            if cpp_op.endswith("="):
+                for other_type in ["Number", "std::string"]:
+                    impl.write(f".def(py::self {cpp_op} {other_type}())\n")
+                impl.write(f".def(py::self {cpp_op} py::self)\n")
+            else:
+                for other_type in ["MathStructure", "Number", "std::string"]:
+                    with impl.indent(
+                        f'.def("{py_op}", [](MathStructure const &self, {other_type} const &other) {{\n'
+                    ):
+                        impl.write(
+                            "MathStructureRef result = MathStructureRef::construct(self);\n"
+                        )
+                        impl.write(f"*result {cpp_op}= other;\n")
+                        impl.write("return result;\n")
+                    impl.write("}, py::is_operator{})\n")
+
+        with impl.indent(f'.def("__neg__", [](MathStructure const &self) {{\n'):
+            impl.write("return MathStructureRef::adopt(-self);\n")
+        impl.write("}, py::is_operator{})\n")
+    impl.write(";\n")
+
 impl.write('#include "proxies.hh"\n')
 
 with function_declaration(
