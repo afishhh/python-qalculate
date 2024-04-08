@@ -45,6 +45,17 @@ function(build_binary_wheel)
 
 	file(MAKE_DIRECTORY ${UNPACKED_WHEEL_DIR})
 
+	macro(add_copy_command SOURCE DEST)
+		list(APPEND EXTRA_DEPS "${DEST}")
+		add_custom_command(
+			OUTPUT "${DEST}"
+			COMMAND
+				"${CMAKE_COMMAND}" -E copy "${SOURCE}" "${DEST}"
+			DEPENDS "${SOURCE}"
+			VERBATIM
+		)
+	endmacro()
+
 	set(DISTINFO_DIR "${UNPACKED_WHEEL_DIR}/${T_NAME}-${CMAKE_PROJECT_VERSION}.dist-info")
 	set(DATA_DIR "${UNPACKED_WHEEL_DIR}/${T_NAME}")
 
@@ -52,7 +63,10 @@ function(build_binary_wheel)
 		file(MAKE_DIRECTORY "${DATA_DIR}")
 
 		file(TOUCH "${DATA_DIR}/py.typed")
-		file(CREATE_LINK "${ARG_STUBS}" "${DATA_DIR}/__init__.pyi" SYMBOLIC)
+		add_copy_command(
+			"${ARG_STUBS}"
+			"${DATA_DIR}/__init__.pyi"
+		)
 	endif()
 
 	file(MAKE_DIRECTORY "${DISTINFO_DIR}")
@@ -74,14 +88,21 @@ function(build_binary_wheel)
 
 	set(EXTLIBNAME "${T_NAME}.${Python_SOABI}${CMAKE_SHARED_LIBRARY_SUFFIX}")
 
-	file(CREATE_LINK "${CMAKE_CURRENT_BINARY_DIR}/${EXTLIBNAME}" "${UNPACKED_WHEEL_DIR}/${EXTLIBNAME}" SYMBOLIC)
+	add_copy_command(
+		"${CMAKE_CURRENT_BINARY_DIR}/${EXTLIBNAME}"
+		"${UNPACKED_WHEEL_DIR}/${EXTLIBNAME}"
+	)
 
+	list(APPEND EXTRA_DEPS "${ARG_TARGET}")
 	add_custom_command(
 		OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${WHEEL_FILESTEM}.whl"
+		COMMAND
 		COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/cmake/write_wheel_record.py" "${UNPACKED_WHEEL_DIR}"
-		COMMAND zip -u -r -9 "../${WHEEL_FILESTEM}.whl" .
+		COMMAND
+			"${CMAKE_COMMAND}" -E tar
+			c "../${WHEEL_FILESTEM}.whl" --format=zip .
 		WORKING_DIRECTORY "${UNPACKED_WHEEL_DIR}"
-		DEPENDS "${ARG_TARGET}"
+		DEPENDS ${EXTRA_DEPS}
 		VERBATIM
 	)
 

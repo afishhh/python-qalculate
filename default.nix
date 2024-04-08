@@ -30,7 +30,6 @@ pkgs.stdenv.mkDerivation (self: {
       };
       dontWrapPythonPrograms = true;
     })
-    zip
   ];
 
   PYQALCULATE_LIBQALCULATE_SOURCE_PATH = "${pkgs.libqalculate.src}";
@@ -54,6 +53,6 @@ pkgs.stdenv.mkDerivation (self: {
 
   installPhase = ''
     mkdir -p "$out/lib/python3.11"
-    cp -Lr qalculate-${self.version}-cp311-cp311-linux_x86_64 "$out/lib/python3.11/site-packages"
+    cp -r qalculate-${self.version}-cp311-cp311-linux_x86_64 "$out/lib/python3.11/site-packages"
   '';
 })
