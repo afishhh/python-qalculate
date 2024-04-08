@@ -313,6 +313,116 @@ properties_for(
 )
 
 
+math_structure_mutating_methods = {
+    **{
+        x: camel_to_snake(x)
+        for x in (
+            "differentiate",
+            "integrate",
+            "expand",
+            "isolate_x",
+            "simplify",
+            "factorize",
+            "expandPartialFractions",
+            "structure",
+        )
+    }
+}
+
+math_structure_overrides = {
+    "EvaluationOptions": (
+        "PEvaluationOptions",
+        "PEvaluationOptions(default_evaluation_options)",
+        False,
+    ),
+    "struct timeval": (None, "nullptr", True),
+}
+
+METHOD_REGEX = re.compile("([a-zA-Z_]+)\\s+([a-zA-Z_]+)\\((.*?)\\)\\s*(const)?;")
+
+with function_declaration(
+    f"{MATH_STRUCTURE_CLASS} &add_math_structure_methods({MATH_STRUCTURE_CLASS} &class_)"
+):
+    declaration = extract_declaration("class", "MathStructure", math_structure_h)
+    assert declaration is not None
+    with impl.indent("return class_\n"):
+        for line in declaration.splitlines()[1:-1]:
+            if match := METHOD_REGEX.match(line.strip()):
+                ret, method, params, _ = match.groups()
+                # FIXME: funny workaround (Cannot accept a std::vector* with pybind)
+                if method == "integrate" and ret == "int":
+                    continue
+                mapped = math_structure_mutating_methods.get(method, None)
+                if mapped is None:
+                    continue
+
+                def parse_param(param: str) -> tuple[str, str, str | None]:
+                    if "=" in param:
+                        decl, default = param.split("=")
+                    else:
+                        decl, default = param, None
+                    type, name = (
+                        decl.replace("&", "& ")
+                        .replace("*", "* ")
+                        .strip()
+                        .rsplit(" ", 1)
+                    )
+                    return (type, name, default)
+
+                parsed_params = [parse_param(param) for param in params.split(",")]
+
+                exposed_params = []
+                for type, name, default in parsed_params:
+                    cast_default = True
+                    for pattern, override in math_structure_overrides.items():
+                        if pattern in type:
+                            if override[0] is None:
+                                name = None
+                            else:
+                                type = type.replace(pattern, override[0])
+                            default = override[1]
+                            cast_default = override[2]
+                            break
+
+                    if cast_default and default:
+                        default = f"static_cast<{type}>({default.strip()})"
+
+                    exposed_params.append((type, name, default))
+
+                params_no_defaults = ", ".join(
+                    f"{type} {name}"
+                    for type, name, _, in exposed_params
+                    if name is not None
+                )
+                args = ", ".join(
+                    f"{name}" if name else default
+                    for _, name, default in exposed_params
+                )
+
+                with impl.indent(
+                    f'.def("{mapped}", [](MathStructure const& self, {params_no_defaults}) -> MathStructureRef {{\n'
+                ):
+                    impl.write(
+                        "MathStructureRef result = MathStructureRef::construct(self);\n"
+                    )
+                    if ret == "bool":
+                        impl.write(f"if(!result->{method}({args})) return nullptr;\n")
+                    else:
+                        raise RuntimeError(
+                            f"Mutating MathStructure method return type {ret} handling not implemented"
+                        )
+                    impl.write("return result;\n")
+                impl.write("}")
+                for type, name, default in exposed_params:
+                    if name is None:
+                        continue
+
+                    impl.write(f', py::arg("{name}")')
+                    if default is not None:
+                        impl.write(f" = {default}")
+                impl.write(")\n")
+    impl.write(";\n")
+
 math_structure_operators = [
     ("*", "__mul__"),
     ("*=", "__imul__"),

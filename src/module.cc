@@ -153,7 +153,7 @@ PYBIND11_MODULE(qalculate, m) {
       .def("__len__", &ChildrenList::size, py::is_operator{});
 
   add_math_structure_operators(add_math_structure_proxies(
-      add_math_structure_properties(
+      add_math_structure_methods(add_math_structure_properties(
           qalc_class_<MathStructure>(m, "MathStructure", py::is_final{})
               .def_property_readonly("children",
                                      [](MathStructure *self) {
@@ -192,7 +192,7 @@ PYBIND11_MODULE(qalculate, m) {
                   [](MathStructure &s, PrintOptions const &options) {
                     return s.print(options);
                   },
-                  py::arg("options") = default_print_options))));
+                  py::arg("options") = default_print_options)))));
 
   number.def(py::init([](MathStructureNumberProxy const &structure) {
     return structure.number();
