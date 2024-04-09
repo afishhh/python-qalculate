@@ -89,7 +89,7 @@ qalc_class_<ExpressionItem> add_expression_item(py::module_ &m) {
               return std::nullopt;
             return ptr;
           },
-          py::arg("name"))
+          py::arg("name"), py::pos_only{})
       // NOTE: While this function does accept extra arguments in libqalculate
       //       I think it can be replaced by the "findName" function instead.
       //       Therefore this can just be a property while findName can be used
@@ -140,6 +140,19 @@ qalc_class_<ExpressionItem> add_expression_item(py::module_ &m) {
 
 qalc_class_<MathFunction> add_math_function(py::module_ &m) {
   return qalc_class_<MathFunction, ExpressionItem>(m, "MathFunction")
+      .def(py::init([](MathStructureFunctionProxy mstruct) {
+             return QalcRef<MathFunction>(mstruct.function());
+           }),
+           py::arg("math_structure"), py::pos_only{})
+      .def_static(
+          "get",
+          [](std::string_view name) -> std::optional<MathFunction *> {
+            auto ptr = CALCULATOR->getFunction(std::string(name));
+            if (!ptr)
+              return std::nullopt;
+            return ptr;
+          },
+          py::arg("name"), py::pos_only{})
       .def(
           "calculate",
           [](MathFunction &self, py::args args,

@@ -203,6 +203,8 @@ PYBIND11_MODULE(qalculate, m) {
   add_math_function(m);
   add_builtin_functions(m);
 
+  py::implicitly_convertible<MathFunction, MathStructureFunctionProxy>();
+
   m.def("get_message_print_options",
         []() { return CALCULATOR->messagePrintOptions(); });
 

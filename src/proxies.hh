@@ -179,8 +179,9 @@ public:
     output += "MathStructure.Comparison(left=";
     MathStructure_repr(&(*this)[0], output);
     output += ", type=";
-    output +=
-        ((py::object)py::cast(this->comparisonType())).attr("__repr__")().cast<std::string>();
+    output += ((py::object)py::cast(this->comparisonType()))
+                  .attr("__repr__")()
+                  .cast<std::string>();
     output += ", right=";
     MathStructure_repr(&(*this)[1], output);
     output += ")";
@@ -189,7 +190,41 @@ public:
 
 STUB_PROXY(Datetime);
 STUB_PROXY(Variable);
-STUB_PROXY(Function);
+
+class MathStructureFunctionProxy : public MathStructure {
+public:
+  MathStructureFunctionProxy(QalcRef<MathFunction> function, py::args args)
+      : MathStructure() {
+    PROXY_INIT;
+    setType(STRUCT_FUNCTION);
+    setFunction(function.forget());
+    for (auto arg : args) {
+      auto *marg = arg.cast<MathStructure *>();
+      marg->ref();
+      addChild_nocopy(marg);
+    }
+  }
+
+  static void init(qalc_class_<MathStructureFunctionProxy> &c) {
+    c.def(py::init<QalcRef<MathFunction>, py::args>(), py::arg("function"),
+          py::pos_only{});
+  }
+
+  void repr(std::string &output) const {
+    output += "MathStructure.Function(function=";
+    output += ((py::object)py::cast(this->function()))
+                  .attr("__repr__")()
+                  .cast<std::string>();
+    output += ", args=[";
+    for (size_t i = 0; i < this->countChildren(); ++i) {
+      if (i != 0)
+        output += ", ";
+      output += py::cast(&(*this)[i]).attr("__repr__")().cast<std::string>();
+    }
+    output += "])";
+  }
+};
+
 STUB_PROXY(Symbolic);
 STUB_PROXY(Unit);
 
