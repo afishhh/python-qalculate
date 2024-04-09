@@ -263,9 +263,9 @@ PYBIND11_MODULE(qalculate, m) {
           {"load_global_functions", &Calculator::loadGlobalFunctions},
           {"load_global_dataSets", &Calculator::loadGlobalDataSets},
       };
-  for (auto [name, fun] : loaders)
-    m.def(name, [fun] {
-      if (!(*CALCULATOR.*fun)())
+  for (auto loader : loaders)
+    m.def(loader.first, [loader] {
+      if (!(*CALCULATOR.*loader.second)())
         throw std::runtime_error("qalculate failed to load something");
     });
 }
