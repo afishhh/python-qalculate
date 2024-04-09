@@ -53,6 +53,63 @@ void _math_structure_append_child(MathStructure &out, Arg &&child) {
   else                                                                         \
     PROXY_APPEND_CHILD(default);
 
+class MathStructureChildrenProxy {
+  MathStructureRef _parent;
+
+public:
+  MathStructureChildrenProxy(MathStructureRef &&parent)
+      : _parent(std::move(parent)) {}
+
+  void append(MathStructure *other) {
+    other->ref();
+    _parent->addChild_nocopy(other);
+  }
+
+  void del_item(size_t idx) {
+    idx += 1;
+    if (idx >= _parent->size() || idx == 0)
+      throw py::index_error();
+
+    _parent->delChild(idx);
+  }
+
+  MathStructure *get_item(size_t idx) {
+    if (idx >= _parent->size())
+      throw py::index_error();
+    return &(*_parent)[idx];
+  }
+
+  size_t size() { return _parent->size(); }
+
+  std::string repr() const {
+    std::string result = "[";
+
+    for (size_t i = 0; i < _parent->size(); ++i) {
+      if (i != 0)
+        result += ", ";
+      MathStructure_repr(&(*_parent)[i], result);
+    }
+
+    return result += "]";
+  }
+};
+
+inline void init_math_structure_children_proxy(py::module_ &m) {
+  py::class_<MathStructureChildrenProxy>(m, "_MathStructureChildren")
+      .def("append", &MathStructureChildrenProxy::append)
+      .def("__delitem__", &MathStructureChildrenProxy::del_item,
+           py::is_operator{})
+      .def("__getitem__", &MathStructureChildrenProxy::get_item,
+           py::is_operator{})
+      .def("__len__", &MathStructureChildrenProxy::size, py::is_operator{})
+      .def("__repr__", &MathStructureChildrenProxy::repr, py::is_operator{});
+}
+
+#define PROXY_CHILDREN_AS(field)                                               \
+  def_property_readonly(field, [](MathStructure *self) {                       \
+    return MathStructureChildrenProxy(MathStructureRef(self));                 \
+  })
+
 class MathStructureNumberProxy final : public MathStructure {
 public:
   MathStructureNumberProxy() : MathStructure(0) { PROXY_INIT; }
@@ -86,7 +143,8 @@ class MathStructureGenericOperationProxy : public MathStructure {
 protected:
   template <typename T> static void init(qalc_class_<T> &c) {
     c.def(py::init<py::typing::List<MathStructure>>(),
-          py::arg("children") = py::list());
+          py::arg("children") = py::list())
+        .PROXY_CHILDREN_AS("children");
   }
 
 public:
@@ -207,7 +265,8 @@ public:
 
   static void init(qalc_class_<MathStructureFunctionProxy> &c) {
     c.def(py::init<QalcRef<MathFunction>, py::args>(), py::arg("function"),
-          py::pos_only{});
+          py::pos_only{})
+        .PROXY_CHILDREN_AS("args");
   }
 
   void repr(std::string &output) const {

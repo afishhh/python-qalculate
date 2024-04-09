@@ -47,26 +47,6 @@ Number number_from_python_int(py::int_ value) {
     return long_value;
 }
 
-class ChildrenList {
-  MathStructureRef _parent;
-
-public:
-  ChildrenList(MathStructureRef &&parent) : _parent(std::move(parent)) {}
-
-  void append(MathStructure *other) {
-    other->ref();
-    _parent->addChild_nocopy(other);
-  }
-
-  MathStructure *get_item(size_t idx) {
-    if (idx >= _parent->size())
-      throw py::index_error();
-    return &(*_parent)[idx];
-  }
-
-  size_t size() { return _parent->size(); }
-};
-
 MathStructureRef calculate(MathStructure const &mstruct,
                            PEvaluationOptions const &options, std::string to) {
   MathStructure result;
@@ -146,21 +126,10 @@ PYBIND11_MODULE(qalculate, m) {
 
   py::implicitly_convertible<py::int_, Number>();
 
-  py::class_<ChildrenList>(m, "_MathStructureChildren")
-      // FIXME: how to expose this safely?
-      .def("append", &ChildrenList::append)
-      .def("__getitem__", &ChildrenList::get_item, py::is_operator{})
-      .def("__len__", &ChildrenList::size, py::is_operator{});
-
+  init_math_structure_children_proxy(m);
   add_math_structure_operators(add_math_structure_proxies(
       add_math_structure_methods(add_math_structure_properties(
           qalc_class_<MathStructure>(m, "MathStructure", py::is_final{})
-              .def_property_readonly("children",
-                                     [](MathStructure *self) {
-                                       return ChildrenList(
-                                           MathStructureRef(self));
-                                     })
-
               .def(
                   "__repr__",
                   [](MathStructure const *self) {
