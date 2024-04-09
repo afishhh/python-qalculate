@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "generated.hh"
+#include "expression_item.hh"
 #include "options.hh"
 #include "proxies.hh"
 #include "pybind.hh"
@@ -196,6 +197,9 @@ PYBIND11_MODULE(qalculate, m) {
   number.def(py::init([](MathStructureNumberProxy const &structure) {
     return structure.number();
   }));
+
+  add_expression_name(m);
+  add_expression_item(m);
 
   m.def("get_message_print_options",
         []() { return CALCULATOR->messagePrintOptions(); });

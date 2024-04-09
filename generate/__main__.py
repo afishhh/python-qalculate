@@ -13,6 +13,7 @@ includes_h = (libqalculate_src / "includes.h").read_text()
 number_h = (libqalculate_src / "Number.h").read_text()
 calculator_h = (libqalculate_src / "Calculator.h").read_text()
 math_structure_h = (libqalculate_src / "MathStructure.h").read_text()
+expression_item_h = (libqalculate_src / "ExpressionItem.h").read_text()
 
 MATH_STRUCTURE_CLASS = "qalc_class_<MathStructure>"
 
@@ -79,12 +80,14 @@ def function_declaration(signature: str):
 
 
 def process_simple_properties(
-    name: str, text: str, renames: dict[str, str | None] = {}
+    name: str, text: str, renames: dict[str, str | None] = {}, qalc_class: bool = False
 ):
-    PROPERTY_REGEX = re.compile("([a-zA-Z_]+)\\s+([a-zA-Z_]+)\\(\\) const;")
+    PROPERTY_REGEX = re.compile(
+        "(virtual\\s+)?(const\\s+)?([a-zA-Z_::]+)[ &]+([a-zA-Z_]+)\\(\\) const;"
+    )
 
     class_type = (
-        f"pybind11::class_<{name}>" if name != "MathStructure" else MATH_STRUCTURE_CLASS
+        f"pybind11::class_<{name}>" if not qalc_class else f"qalc_class_<{name}>"
     )
 
     with function_declaration(
@@ -93,7 +96,7 @@ def process_simple_properties(
         with impl.indent("return class_\n"):
             for line in text.splitlines()[1:-1]:
                 if match := PROPERTY_REGEX.match(line.strip()):
-                    _, prop = match.groups()
+                    _, _, _, prop = match.groups()
                     mapped = renames.get(prop, camel_to_snake(prop))
                     if mapped is None:
                         continue
@@ -129,15 +132,30 @@ def extract_declaration(keyword: str, name: str, text: str):
 
 
 def process_options_declaration(
-    name: str, text: str, exclude: set[str], override_class=None
+    name: str,
+    text: str,
+    exclude: set[str],
+    override_class=None,
+    func_name=None,
+    define_new_default=False,
+    pass_by_type: dict[str, str] = {},
 ):
     declarations = text.splitlines()[1:-1]
-    field_regex = re.compile("([a-zA-Z_]+)\\s+([a-zA-Z_]+);")
+    field_regex = re.compile("([a-zA-Z_::]+)\\s+([a-zA-Z_]+);")
 
-    with function_declaration(
-        f"void add_{pascal_to_snake(name)}(pybind11::module_ &m)"
-    ):
-        with impl.indent(f'pybind11::class_<{override_class or name}>(m, "{name}")\n'):
+    if func_name is None:
+        func_name = f"add_{pascal_to_snake(name)}"
+
+    defaults_name = f"default_{pascal_to_snake(name)}"
+
+    if define_new_default:
+        defaults_name = f"_autogen_{pascal_to_snake(name)}_defaults"
+        impl.write(f"{name} {defaults_name};\n")
+
+    pybind_class = f"pybind11::class_<{override_class or name}>"
+
+    with function_declaration(f"{pybind_class} {func_name}(pybind11::module_ &m)"):
+        with impl.indent(f'return {pybind_class}(m, "{name}")\n'):
             options = {}
             for line in declarations:
                 if match := field_regex.match(line.strip()):
@@ -154,7 +172,7 @@ def process_options_declaration(
             for i, (field, type) in enumerate(options):
                 if i > 0:
                     impl.write(", ")
-                impl.write(f"{type} {field}")
+                impl.write(f"{pass_by_type.get(type, type)} {field}")
             with impl.indent(") {\n"):
                 impl.write(f"{name} result;\n")
                 for field, type in options:
@@ -162,9 +180,7 @@ def process_options_declaration(
                 impl.write(f"return result;\n")
             impl.write("}), py::kw_only{}")
             for field, type in options:
-                impl.write(
-                    f', py::arg("{field}") = default_{pascal_to_snake(name)}.{field}'
-                )
+                impl.write(f', py::arg("{field}") = {defaults_name}.{field}')
             impl.write(")\n")
 
             with impl.indent(f'.def("__repr__", [](py::object s) {{\n'):
@@ -175,7 +191,7 @@ def process_options_declaration(
                         impl.write(f'output += ", ";\n')
                     impl.write(f'output += "{field}=";\n')
                     impl.write(
-                        f'output += s.attr("{field}").attr("__repr__")().cast<std::string>();\n'
+                        f'output += s.attr("{field}").attr("__repr__")().cast<std::string_view>();\n'
                     )
                 impl.write("return output;\n")
             impl.write("})\n")
@@ -273,16 +289,26 @@ options("ParseOptions", {"unended_function", "default_dataset"})
 options("EvaluationOptions", override_class="class PEvaluationOptions")
 
 
-def properties_for(name: str, text: str, renames: dict[str, str | None] = {}):
+def properties_for(
+    name: str, text: str, renames: dict[str, str | None] = {}, qalc_class: bool = False
+):
     declaration = extract_declaration("class", name, text)
     assert declaration is not None
-    process_simple_properties(name, declaration, renames)
+    process_simple_properties(name, declaration, renames, qalc_class)
 
 
 properties_for(
     "Number",
     number_h,
-    {"floatValue": None, "integer": None, "getBoolean": None},
+    {
+        "floatValue": None,
+        "integer": None,
+        "getBoolean": None,
+        "internalType": None,
+        "internalRational": None,
+        "internalLowerFloat": None,
+        "internalUpperFloat": None,
+    },
 )
 
 declaration = extract_declaration("enum", "StructureType", math_structure_h)
@@ -299,17 +325,28 @@ properties_for(
     "MathStructure",
     math_structure_h,
     {
-        "countChildren": None,
-        "refcount": None,
-        "isAborted": None,
-        "rows": None,
-        "size": None,
-        "type": None,
-        "comparisonType": None,
         # Remove type-specific checks (use instanceof instead)
         **{f"is{snake_to_pascal(name)}": None for name in structure_types},
-        **{f: None for f in ("isDateTime", "isMatrix")},
+        **{
+            f: None
+            for f in (
+                "isDateTime",
+                "find_x_var",
+                "isMatrix",
+                "symbol",
+                "number",
+                "last",
+                "countChildren",
+                "refcount",
+                "isAborted",
+                "rows",
+                "size",
+                "type",
+                "comparisonType",
+            )
+        },
     },
+    qalc_class=True,
 )
 
 
@@ -509,6 +546,24 @@ with header.indent("template <> struct polymorphic_type_hook<MathStructure> {\n"
         header.write("}\n")
     header.write("}\n")
 header.write("};\n}\n")
+
+declaration = extract_declaration("struct", "ExpressionName", expression_item_h)
+assert declaration is not None
+process_options_declaration(
+    "ExpressionName",
+    declaration,
+    {"priv"},
+    func_name="add_expression_name_auto",
+    define_new_default=True,
+    pass_by_type={"std::string": "std::string_view"},
+)
+
+properties_for(
+    "ExpressionItem",
+    expression_item_h,
+    {"refcount": None, "type": None, "subtype": None, "id": None, "countNames": None},
+    qalc_class=True,
+)
 
 header.close()
 impl.close()
