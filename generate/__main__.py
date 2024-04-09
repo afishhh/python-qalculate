@@ -14,6 +14,7 @@ number_h = (libqalculate_src / "Number.h").read_text()
 calculator_h = (libqalculate_src / "Calculator.h").read_text()
 math_structure_h = (libqalculate_src / "MathStructure.h").read_text()
 expression_item_h = (libqalculate_src / "ExpressionItem.h").read_text()
+builtin_functions_h = (libqalculate_src / "BuiltinFunctions.h").read_text()
 
 MATH_STRUCTURE_CLASS = "qalc_class_<MathStructure>"
 
@@ -564,6 +565,13 @@ properties_for(
     {"refcount": None, "type": None, "subtype": None, "id": None, "countNames": None},
     qalc_class=True,
 )
+
+BUILTIN_FUNCTION_REGEX = re.compile("^DECLARE_BUILTIN_FUNCTION.*?\\(([a-zA-Z_]+),\\s+([a-zA-Z_]+)\\)", re.MULTILINE)
+
+with function_declaration("void add_builtin_functions(py::module_ &m)"):
+    for match in BUILTIN_FUNCTION_REGEX.finditer(builtin_functions_h):
+        name, id = match.groups()
+        impl.write(f'(void)qalc_class_<{name}, MathFunction>(m, "{name}");\n')
 
 header.close()
 impl.close()

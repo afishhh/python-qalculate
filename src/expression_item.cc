@@ -1,4 +1,5 @@
-#include "expression_item.hh"
+#include "expression_items.hh"
+#include "options.hh"
 
 #include <libqalculate/ExpressionItem.h>
 #include <limits>
@@ -135,4 +136,29 @@ qalc_class_<ExpressionItem> add_expression_item(py::module_ &m) {
           py::arg("plural") = static_cast<std::optional<bool>>(std::nullopt),
           py::arg("can_display_unicode_string") =
               static_cast<std::function<bool(char const *)>>(nullptr));
+}
+
+qalc_class_<MathFunction> add_math_function(py::module_ &m) {
+  return qalc_class_<MathFunction, ExpressionItem>(m, "MathFunction")
+      .def(
+          "calculate",
+          [](MathFunction &self, py::args args,
+             PEvaluationOptions const &options) {
+            MathStructure vargs;
+            vargs.setType(STRUCT_VECTOR);
+            for (auto arg : args) {
+              auto *marg = arg.cast<MathStructure *>();
+              marg->ref();
+              vargs.addChild_nocopy(marg);
+            }
+
+            return MathStructureRef::construct(
+                self.calculate(vargs, (EvaluationOptions const &)options));
+          },
+          py::arg("options") = PEvaluationOptions())
+      .def("calculate", [](MathFunction &self, MathStructureVectorProxy &vargs,
+                           PEvaluationOptions const &options) {
+        return MathStructureRef::construct(self.calculate(
+            (MathStructure &)vargs, (EvaluationOptions const &)options));
+      });
 }

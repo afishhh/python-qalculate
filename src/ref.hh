@@ -25,8 +25,8 @@ template <typename T> class QalcRef {
   // for debugging
   inline void _ref_notify(int new_refs) {
     if (_ptr) {
-      //   std::cerr << "QalcPtr<" << typeid(T).name() << "> " << (void *)_ptr
-      //             << "'s refs: " << new_refs;
+      // std::cerr << "QalcPtr<" << typeid(T).name() << "> " << (void *)_ptr
+      //           << "'s refs: " << new_refs;
       // std::cerr << '\n';
       (void)new_refs;
     }
@@ -76,7 +76,11 @@ public:
     return *this;
   }
 
-  void forget() { _ptr = nullptr; }
+  T *forget() {
+    T *old = _ptr;
+    _ptr = nullptr;
+    return old;
+  }
 
   ~QalcRef() {
     if (_ptr) {

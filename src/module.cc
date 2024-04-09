@@ -9,8 +9,8 @@
 #include <pybind11/stl.h>
 #include <string_view>
 
+#include "expression_items.hh"
 #include "generated.hh"
-#include "expression_item.hh"
 #include "options.hh"
 #include "proxies.hh"
 #include "pybind.hh"
@@ -200,6 +200,8 @@ PYBIND11_MODULE(qalculate, m) {
 
   add_expression_name(m);
   add_expression_item(m);
+  add_math_function(m);
+  add_builtin_functions(m);
 
   m.def("get_message_print_options",
         []() { return CALCULATOR->messagePrintOptions(); });
