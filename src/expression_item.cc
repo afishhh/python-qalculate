@@ -34,6 +34,39 @@ public:
   size_t size() const { return _parent->countNames(); }
 };
 
+template <typename Ret, typename... Args>
+std::pair<Ret (*)(Args..., void *), void *>
+make_function_pointer_pair(std::function<Ret(Args...)> const &function) {
+  if (!function)
+    return {nullptr, nullptr};
+
+  return {[](Args... args, void *function) {
+            return (*(std::function<Ret(Args...)> *)function)(args...);
+          },
+          (void *)&function};
+}
+
+#define DEF_PREFERRED_NAME(py_name, cpp_name)                                  \
+  def(                                                                         \
+      py_name,                                                                 \
+      [](ExpressionItem const &self, bool abbreviation, bool use_unicode,      \
+         bool plural, bool reference,                                          \
+         std::function<bool(char const *)> can_display_unicode_string)         \
+          -> std::optional<std::reference_wrapper<ExpressionName const>> {     \
+        auto [fun, data] =                                                     \
+            make_function_pointer_pair(can_display_unicode_string);            \
+        auto &result = self.cpp_name(abbreviation, use_unicode, plural,        \
+                                     reference, fun, data);                    \
+        if (&result == &empty_expression_name)                                 \
+          return std::nullopt;                                                 \
+        return std::ref(result);                                               \
+      },                                                                       \
+      py::return_value_policy::reference_internal,                             \
+      py::arg("abbreviation") = false, py::arg("use_unicode") = false,         \
+      py::arg("plural") = false, py::arg("reference") = false,                 \
+      py::arg("can_display_unicode_string") =                                  \
+          static_cast<std::function<bool(char const *)>>(nullptr))
+
 qalc_class_<ExpressionItem> add_expression_item(py::module_ &m) {
   py::class_<ExpressionNamesProxy>(m, "_ExpressionNames")
       .def("__getitem__", &ExpressionNamesProxy::get, py::is_operator{})
@@ -61,10 +94,20 @@ qalc_class_<ExpressionItem> add_expression_item(py::module_ &m) {
       //       Therefore this can just be a property while findName can be used
       //       for more complex searches.
       .def_property_readonly(
-          "name", [](ExpressionItem const &item) { return item.name(); })
-      // TODO: can_display_unicode_string_function
+          "name", [](ExpressionItem const &self) { return self.name(); })
+      .DEF_PREFERRED_NAME("preferred_name", preferredName)
+      .DEF_PREFERRED_NAME("preferred_input_name", preferredInputName)
+      .DEF_PREFERRED_NAME("preferred_display_name", preferredDisplayName)
+      .def_property(
+          "title",
+          [](ExpressionItem const &self) -> std::optional<std::string> {
+            return self.title(false);
+          },
+          [](ExpressionItem &self, std::string_view title) {
+            self.setTitle(std::string(title));
+          })
       .def(
-          "findName",
+          "find_name",
           [](ExpressionItem const &item, std::optional<bool> abbreviation,
              std::optional<bool> use_unicode, std::optional<bool> plural,
              std::function<bool(char const *)> can_display_unicode_string)
@@ -75,19 +118,14 @@ qalc_class_<ExpressionItem> add_expression_item(py::module_ &m) {
                 use_unicode.has_value() ? use_unicode.value() : -1;
             int i_plural = plural.has_value() ? plural.value() : -1;
 
-            ExpressionName const *result;
-            if (!can_display_unicode_string)
-              result = &item.findName(i_abbreviation, i_use_unicode, i_plural);
-            result = &item.findName(
-                i_abbreviation, i_use_unicode, i_plural,
-                [](char const *str, void *fun) {
-                  return (*(std::function<bool(char const *)> *)fun)(str);
-                },
-                &can_display_unicode_string);
+            auto [fun, data] =
+                make_function_pointer_pair(can_display_unicode_string);
+            auto &result = item.findName(i_abbreviation, i_use_unicode,
+                                         i_plural, fun, data);
 
-            if (result == &empty_expression_name)
+            if (&result == &empty_expression_name)
               return std::nullopt;
-            return {std::ref(*result)};
+            return {std::ref(result)};
           },
           py::return_value_policy::reference_internal, py::kw_only{},
           py::arg("abbreviation") =
@@ -96,5 +134,5 @@ qalc_class_<ExpressionItem> add_expression_item(py::module_ &m) {
               static_cast<std::optional<bool>>(std::nullopt),
           py::arg("plural") = static_cast<std::optional<bool>>(std::nullopt),
           py::arg("can_display_unicode_string") =
-              std::function<bool(char const *)>(nullptr));
+              static_cast<std::function<bool(char const *)>>(nullptr));
 }
