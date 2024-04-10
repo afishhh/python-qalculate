@@ -17,6 +17,8 @@ namespace py = pybind11;
 // FIXME: split up generated.hh into separate files
 void MathStructure_repr(MathStructure const *mstruct, std::string &output);
 
+inline PrintOptions repr_print_options;
+
 // FIXME: how fix
 #define PROXY_INIT                                                             \
   do {                                                                         \
@@ -93,14 +95,16 @@ public:
     return MathStructureMutableChildrenList(MathStructureRef(self));           \
   });
 
-inline qalc_class_<MathStructure> &init_math_structure_children(py::module_ &m,
-                                         qalc_class_<MathStructure> &mstruct) {
+inline qalc_class_<MathStructure> &
+init_math_structure_children(py::module_ &m,
+                             qalc_class_<MathStructure> &mstruct) {
   py::class_<MathStructureChildrenList>(m, "_MathStructureChildren")
       .def("__getitem__", &MathStructureChildrenList::get_item,
            py::is_operator{})
       .def("__len__", &MathStructureChildrenList::size, py::is_operator{});
 
-  py::class_<MathStructureMutableChildrenList>(m, "_MathStructureMutableChildren")
+  py::class_<MathStructureMutableChildrenList>(m,
+                                               "_MathStructureMutableChildren")
       .def("append", &MathStructureMutableChildrenList::append,
            py::is_operator{})
       .def("__getitem__", &MathStructureMutableChildrenList::get_item,
@@ -110,9 +114,27 @@ inline qalc_class_<MathStructure> &init_math_structure_children(py::module_ &m,
       .def("__len__", &MathStructureMutableChildrenList::size,
            py::is_operator{});
 
-  return mstruct.def_property_readonly("children", [](MathStructure *self) {
-    return MathStructureChildrenList(MathStructureRef(self));
-  });
+  return mstruct
+      .def(
+          "__str__",
+          [](MathStructure const &) {
+            throw py::type_error("Don't use MathStructure.__str__, instead use "
+                                 "MathStructure.print");
+          },
+          py::is_operator{})
+
+      .def(
+          "__repr__",
+          [](MathStructure const *self) {
+            std::string output;
+            MathStructure_repr(self, output);
+            return output;
+          },
+          py::is_operator{})
+
+      .def_property_readonly("children", [](MathStructure *self) {
+        return MathStructureChildrenList(MathStructureRef(self));
+      });
 }
 
 class MathStructureNumberProxy final : public MathStructure {
@@ -131,14 +153,16 @@ public:
                         self.number().set(value);
                       })
         .def(
-            "__str__",
-            [](MathStructure const &self) { return self.number().print(); },
+            "__repr__",
+            [](MathStructure const &self) {
+              return self.number().print(repr_print_options);
+            },
             py::is_operator{});
   }
 
   void repr(std::string &output) const {
     output += "MathStructure.Number(";
-    output += this->number().print();
+    output += this->number().print(repr_print_options);
     output += ")";
   }
 };

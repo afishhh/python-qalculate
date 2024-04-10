@@ -90,6 +90,8 @@ PYBIND11_MODULE(qalculate, m) {
   add_parse_options(m);
   add_evaluation_options(m);
 
+  repr_print_options.use_unicode_signs = UNICODE_SIGNS_WITHOUT_EXPONENTS;
+
   auto number = add_number_properties(
       py::class_<Number>(m, "Number")
           .def(py::init<>())
@@ -101,8 +103,25 @@ PYBIND11_MODULE(qalculate, m) {
           }))
 
           .def(
-              "__str__", [](Number const &self) { return self.print(); },
-              py::is_operator())
+              "print",
+              [](Number const &self, PrintOptions const &options) {
+                return self.print(options);
+              },
+              py::arg("options") = default_print_options, py::pos_only{},
+              py::is_operator{})
+
+          .def(
+              "__str__",
+              [](Number const &) {
+                throw py::type_error("Don't use Number.__str__, instead use "
+                                     "Number.print");
+              },
+              py::is_operator{})
+
+          .def(
+              "__repr__",
+              [](Number const &self) { return self.print(repr_print_options); },
+              py::is_operator{})
 
           .def(-py::self)
 
@@ -131,15 +150,6 @@ PYBIND11_MODULE(qalculate, m) {
       m, add_math_structure_operators(
              add_math_structure_methods(add_math_structure_properties(
                  qalc_class_<MathStructure>(m, "MathStructure", py::is_final{})
-                     .def(
-                         "__repr__",
-                         [](MathStructure const *self) {
-                           std::string output;
-                           MathStructure_repr(self, output);
-                           return output;
-                         },
-                         py::is_operator{})
-
                      .def("compare", &MathStructure::compare)
                      .def("compare_approximately",
                           &MathStructure::compareApproximately)
