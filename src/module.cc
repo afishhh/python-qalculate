@@ -47,26 +47,6 @@ Number number_from_python_int(py::int_ value) {
     return long_value;
 }
 
-class ChildrenList {
-  MathStructureRef _parent;
-
-public:
-  ChildrenList(MathStructureRef &&parent) : _parent(std::move(parent)) {}
-
-  void append(MathStructure *other) {
-    other->ref();
-    _parent->addChild_nocopy(other);
-  }
-
-  MathStructure *get_item(size_t idx) {
-    if (idx >= _parent->size())
-      throw py::index_error();
-    return &(*_parent)[idx];
-  }
-
-  size_t size() { return _parent->size(); }
-};
-
 MathStructureRef calculate(MathStructure const &mstruct,
                            PEvaluationOptions const &options, std::string to) {
   MathStructure result;
@@ -146,53 +126,43 @@ PYBIND11_MODULE(qalculate, m) {
 
   py::implicitly_convertible<py::int_, Number>();
 
-  py::class_<ChildrenList>(m, "_MathStructureChildren")
-      // FIXME: how to expose this safely?
-      .def("append", &ChildrenList::append)
-      .def("__getitem__", &ChildrenList::get_item, py::is_operator{})
-      .def("__len__", &ChildrenList::size, py::is_operator{});
+  // FIXME: Clean this up finally...
+  add_math_structure_proxies(init_math_structure_children(
+      m, add_math_structure_operators(
+             add_math_structure_methods(add_math_structure_properties(
+                 qalc_class_<MathStructure>(m, "MathStructure", py::is_final{})
+                     .def(
+                         "__repr__",
+                         [](MathStructure const *self) {
+                           std::string output;
+                           MathStructure_repr(self, output);
+                           return output;
+                         },
+                         py::is_operator{})
 
-  add_math_structure_operators(add_math_structure_proxies(
-      add_math_structure_methods(add_math_structure_properties(
-          qalc_class_<MathStructure>(m, "MathStructure", py::is_final{})
-              .def_property_readonly("children",
-                                     [](MathStructure *self) {
-                                       return ChildrenList(
-                                           MathStructureRef(self));
-                                     })
+                     .def("compare", &MathStructure::compare)
+                     .def("compare_approximately",
+                          &MathStructure::compareApproximately)
 
-              .def(
-                  "__repr__",
-                  [](MathStructure const *self) {
-                    std::string output;
-                    MathStructure_repr(self, output);
-                    return output;
-                  },
-                  py::is_operator{})
+                     .def_static(
+                         "parse",
+                         [](std::string_view s) {
+                           return MathStructureRef::adopt(
+                               CALCULATOR->parse(std::string(s)));
+                         },
+                         py::arg("value"), py::pos_only{})
 
-              .def("compare", &MathStructure::compare)
-              .def("compare_approximately",
-                   &MathStructure::compareApproximately)
+                     .def("calculate", &calculate,
+                          py::arg("options") =
+                              PEvaluationOptions(default_evaluation_options),
+                          py::arg("to") = "")
 
-              .def_static(
-                  "parse",
-                  [](std::string_view s) {
-                    return MathStructureRef::adopt(
-                        CALCULATOR->parse(std::string(s)));
-                  },
-                  py::arg("value"), py::pos_only{})
-
-              .def("calculate", &calculate,
-                   py::arg("options") =
-                       PEvaluationOptions(default_evaluation_options),
-                   py::arg("to") = "")
-
-              .def(
-                  "print",
-                  [](MathStructure &s, PrintOptions const &options) {
-                    return s.print(options);
-                  },
-                  py::arg("options") = default_print_options)))));
+                     .def(
+                         "print",
+                         [](MathStructure &s, PrintOptions const &options) {
+                           return s.print(options);
+                         },
+                         py::arg("options") = default_print_options))))));
 
   number.def(py::init([](MathStructureNumberProxy const &structure) {
     return structure.number();
