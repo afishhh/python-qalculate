@@ -55,66 +55,42 @@ void _math_structure_append_child(MathStructure &out, Arg &&child) {
   else                                                                         \
     PROXY_APPEND_CHILD(default);
 
-class MathStructureChildrenList {
-protected:
-  MathStructureRef _parent;
-
+class MathStructureSequence : public MathStructure {
 public:
-  MathStructureChildrenList(MathStructureRef &&parent)
-      : _parent(std::move(parent)) {}
-
-  MathStructure *get_item(size_t idx) {
-    if (idx >= _parent->size())
-      throw py::index_error();
-    return &(*_parent)[idx];
-  }
-
-  size_t size() { return _parent->size(); }
-};
-
-class MathStructureMutableChildrenList : public MathStructureChildrenList {
-public:
-  MathStructureMutableChildrenList(MathStructureRef &&parent)
-      : MathStructureChildrenList(std::move(parent)) {}
-
   void del_item(size_t idx) {
     idx += 1;
-    if (idx > _parent->size() || idx == 0)
+    if (idx > this->size() || idx == 0)
       throw py::index_error{};
-    _parent->delChild(idx);
+    this->delChild(idx);
   }
 
   void append(MathStructure *other) {
     other->ref();
-    _parent->addChild_nocopy(other);
+    this->addChild_nocopy(other);
   }
 };
-
-#define PROXY_EXPOSE_MUTABLE_CHILDREN()                                        \
-  def_property_readonly("children", [](MathStructure *self) {                  \
-    return MathStructureMutableChildrenList(MathStructureRef(self));           \
-  });
 
 inline qalc_class_<MathStructure> &
 init_math_structure_children(py::module_ &m,
                              qalc_class_<MathStructure> &mstruct) {
-  py::class_<MathStructureChildrenList>(m, "_MathStructureChildren")
-      .def("__getitem__", &MathStructureChildrenList::get_item,
-           py::is_operator{})
-      .def("__len__", &MathStructureChildrenList::size, py::is_operator{});
-
-  py::class_<MathStructureMutableChildrenList>(m,
-                                               "_MathStructureMutableChildren")
-      .def("append", &MathStructureMutableChildrenList::append,
-           py::is_operator{})
-      .def("__getitem__", &MathStructureMutableChildrenList::get_item,
-           py::is_operator{})
-      .def("__delitem__", &MathStructureMutableChildrenList::del_item,
-           py::is_operator{})
-      .def("__len__", &MathStructureMutableChildrenList::size,
-           py::is_operator{});
+  qalc_class_<MathStructureSequence, MathStructure>(mstruct, "Sequence")
+      .def("append", &MathStructureSequence::append, py::is_operator{})
+      .def("__delitem__", &MathStructureSequence::del_item, py::is_operator{});
 
   return mstruct
+      .def(
+          "__getitem__",
+          [](MathStructure const &self, size_t idx) {
+            if (idx >= self.size())
+              throw py::index_error();
+            return &self[idx];
+          },
+          py::is_operator{})
+
+      .def(
+          "__len__", [](MathStructure const &self) { return self.size(); },
+          py::is_operator{})
+
       .def(
           "__str__",
           [](MathStructure const &) {
@@ -130,11 +106,7 @@ init_math_structure_children(py::module_ &m,
             MathStructure_repr(self, output);
             return output;
           },
-          py::is_operator{})
-
-      .def_property_readonly("children", [](MathStructure *self) {
-        return MathStructureChildrenList(MathStructureRef(self));
-      });
+          py::is_operator{});
 }
 
 class MathStructureNumberProxy final : public MathStructure {
@@ -144,7 +116,9 @@ public:
     PROXY_INIT;
   }
 
-  static void init(qalc_class_<MathStructureNumberProxy> &c) {
+  using Base = MathStructure;
+
+  static void init(qalc_class_<MathStructureNumberProxy, Base> &c) {
     c.def(py::init<>())
         .def(py::init<Number>())
         .def_property("value",
@@ -168,14 +142,7 @@ public:
 };
 
 template <size_t MIN_ITEMS, typename Self>
-class MathStructureGenericOperationProxy : public MathStructure {
-protected:
-  template <typename T> static void init(qalc_class_<T> &c) {
-    c.def(py::init<py::typing::List<MathStructure>>(),
-          py::arg("children") = py::list())
-        .PROXY_EXPOSE_MUTABLE_CHILDREN();
-  }
-
+class MathStructureGenericOperationProxy : public MathStructureSequence {
 public:
   MathStructureGenericOperationProxy(py::typing::List<MathStructure> list) {
     PROXY_INIT;
@@ -191,6 +158,16 @@ public:
     }
   }
 
+  using Base = MathStructureSequence;
+
+protected:
+  template <typename T>
+  static void init(qalc_class_<T, MathStructureSequence> &c) {
+    c.def(py::init<py::typing::List<MathStructure>>(),
+          py::arg("children") = py::list());
+  }
+
+public:
   void repr(std::string &output) const {
     output += Self::PYTHON_NAME;
     output += "([";
@@ -209,7 +186,7 @@ public:
   public:                                                                      \
     static constexpr std::string_view PYTHON_NAME = name;                      \
     static constexpr StructureType TYPE = type;                                \
-    static void init(qalc_class_<proxy> &c) {                                  \
+    static void init(qalc_class_<proxy, Base> &c) {                            \
       MathStructureGenericOperationProxy::init(c);                             \
     }                                                                          \
   }
@@ -221,7 +198,8 @@ public:
 #define STUB_PROXY(name)                                                       \
   class MathStructure##name##Proxy final : public MathStructure {              \
   public:                                                                      \
-    static void init(qalc_class_<MathStructure##name##Proxy> &) {}             \
+    using Base = MathStructure;                                                \
+    static void init(qalc_class_<MathStructure##name##Proxy, Base> &) {}       \
     void repr(std::string &output) const {                                     \
       output += "<MathStructure." #name ">";                                   \
     }                                                                          \
@@ -252,7 +230,9 @@ public:
     PROXY_APPEND_CHILD_OPT(right, MathStructureRef::construct(0));
   }
 
-  static void init(qalc_class_<MathStructureComparisonProxy> &c) {
+  using Base = MathStructure;
+
+  static void init(qalc_class_<MathStructureComparisonProxy, Base> &c) {
     c.def(py::init<MathStructure *, ComparisonType, MathStructure *>(),
           py::arg("left") = static_cast<MathStructure *>(nullptr),
           py::arg("type") = ComparisonType::COMPARISON_EQUALS,
@@ -292,10 +272,11 @@ public:
     }
   }
 
-  static void init(qalc_class_<MathStructureFunctionProxy> &c) {
+  using Base = MathStructure;
+
+  static void init(qalc_class_<MathStructureFunctionProxy, Base> &c) {
     c.def(py::init<QalcRef<MathFunction>, py::args>(), py::arg("function"),
-          py::pos_only{})
-        .PROXY_EXPOSE_MUTABLE_CHILDREN();
+          py::pos_only{});
   }
 
   void repr(std::string &output) const {
@@ -326,7 +307,9 @@ public:
     PROXY_APPEND_CHILD_OPT(exponent, MathStructureRef::construct(0));
   }
 
-  static void init(qalc_class_<MathStructurePowerProxy> &c) {
+  using Base = MathStructure;
+
+  static void init(qalc_class_<MathStructurePowerProxy, Base> &c) {
     c.def(py::init<MathStructure *, MathStructure *>(),
           py::arg("base") = static_cast<MathStructure *>(nullptr),
           py::arg("exponent") = static_cast<MathStructure *>(nullptr))
@@ -353,7 +336,9 @@ public:
     setType(STRUCT_UNDEFINED);
   }
 
-  static void init(qalc_class_<MathStructureUndefinedProxy> &c) {
+  using Base = MathStructure;
+
+  static void init(qalc_class_<MathStructureUndefinedProxy, Base> &c) {
     c.def(py::init<>());
   }
 

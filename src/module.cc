@@ -154,14 +154,6 @@ PYBIND11_MODULE(qalculate, m) {
                      .def("compare_approximately",
                           &MathStructure::compareApproximately)
 
-                     .def_static(
-                         "parse",
-                         [](std::string_view s) {
-                           return MathStructureRef::adopt(
-                               CALCULATOR->parse(std::string(s)));
-                         },
-                         py::arg("value"), py::pos_only{})
-
                      .def("calculate", &calculate,
                           py::arg("options") =
                               PEvaluationOptions(default_evaluation_options),
@@ -194,6 +186,13 @@ PYBIND11_MODULE(qalculate, m) {
   m.def("calculate", &calculate, py::arg("mstruct"), py::pos_only{},
         py::arg("options") = PEvaluationOptions(default_evaluation_options),
         py::arg("to") = "");
+
+  m.def(
+      "parse",
+      [](std::string_view s) {
+        return MathStructureRef::adopt(CALCULATOR->parse(std::string(s)));
+      },
+      py::arg("value"), py::pos_only{});
 
   m.def(
       "calculate",
