@@ -130,14 +130,6 @@ PYBIND11_MODULE(qalculate, m) {
                })
 
           .def(
-              "__str__",
-              [](Number const &) {
-                throw py::type_error("Don't use Number.__str__, instead use "
-                                     "Number.print");
-              },
-              py::is_operator{})
-
-          .def(
               "__repr__",
               [](Number const &self) { return self.print(repr_print_options); },
               py::is_operator{})

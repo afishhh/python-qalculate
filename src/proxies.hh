@@ -92,14 +92,6 @@ init_math_structure_children(py::module_ &m,
           py::is_operator{})
 
       .def(
-          "__str__",
-          [](MathStructure const &) {
-            throw py::type_error("Don't use MathStructure.__str__, instead use "
-                                 "MathStructure.print");
-          },
-          py::is_operator{})
-
-      .def(
           "__repr__",
           [](MathStructure const *self) {
             std::string output;
