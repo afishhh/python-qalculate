@@ -4,9 +4,14 @@
 #include <libqalculate/qalculate.h>
 #include <optional>
 
+#include "ref.hh"
+
 class PEvaluationOptions final : public EvaluationOptions {
 public:
-  ~PEvaluationOptions() { delete isolate_var; }
+  ~PEvaluationOptions() {
+    if (isolate_var)
+      const_cast<MathStructure *>(isolate_var)->unref();
+  }
   PEvaluationOptions() : EvaluationOptions() {}
   PEvaluationOptions(EvaluationOptions const &options)
       : EvaluationOptions(options) {}
@@ -22,6 +27,6 @@ public:
   PEvaluationOptions(PEvaluationOptions const &) = delete;
   PEvaluationOptions &&operator=(PEvaluationOptions const &) = delete;
 
-  MathStructure *get_isolate_var();
-  void set_isolate_var(MathStructure const *value);
+  std::optional<MathStructureRef> get_isolate_var();
+  void set_isolate_var(std::optional<MathStructureRef>);
 };
