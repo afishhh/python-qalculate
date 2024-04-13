@@ -47,6 +47,17 @@ Number number_from_python_int(py::int_ value) {
     return long_value;
 }
 
+py::int_ number_to_python_int(Number const &number) {
+  if (!number.isInteger())
+    throw py::value_error{};
+
+  std::string printed = number.printNumerator(36);
+  char *end = printed.end().base();
+  PyObject *result { PyLong_FromString(printed.c_str(), &end, 36)};
+  assert(result != nullptr && end == printed.end().base());
+  return py::reinterpret_steal<py::int_>(result);
+}
+
 MathStructureRef calculate(MathStructure const &mstruct,
                            PEvaluationOptions const &options, std::string to) {
   MathStructure result;
@@ -109,6 +120,11 @@ PYBIND11_MODULE(qalculate, m) {
               },
               py::arg("options") = default_print_options, py::pos_only{},
               py::is_operator{})
+
+          .def("to_int",
+               [](Number const &self) -> py::int_ {
+                 return number_to_python_int(self);
+               })
 
           .def(
               "__str__",
