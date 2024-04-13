@@ -18,6 +18,26 @@ def tokenize(text: str) -> Iterable[Token]:
         "_", ""
     ).replace("$", "")
 
+    LEN2_PUNCT = {
+        "::",
+        "+=",
+        "-=",
+        "*=",
+        "/=",
+        "|=",
+        "&=",
+        "->",
+        "||",
+        "&&",
+        "==",
+        "!=",
+        "<=",
+        ">=",
+        "++",
+        "--",
+    }
+    LEN3_PUNCT = {"..."}
+
     while text:
         if text[0] in string.whitespace:
             end = find_any_not(text, string.whitespace)
@@ -50,14 +70,15 @@ def tokenize(text: str) -> Iterable[Token]:
                     raise ValueError("unterminated string literal")
                 continue
 
-            for pat in ("::", "+=", "-=", "*=", "/=", "|=", "&=", "...", "->", "&&"):
-                if text.startswith(pat):
-                    yield Token("punct", pat)
-                    text = text[len(pat) :]
-                    break
+            if len(text) >= 3 and text[:3] in LEN3_PUNCT:
+                token_length = 3
+            elif len(text) >= 2 and text[:2] in LEN2_PUNCT:
+                token_length = 2
             else:
-                yield Token("punct", text[:1])
-                text = text[1:]
+                token_length = 1
+
+            yield Token("punct", text[:token_length])
+            text = text[token_length:]
         else:
             next = find_any(text, identifier_disallowed)
             yield Token("ident", text[:next])
