@@ -277,7 +277,7 @@ structure_types.remove("ABORTED")
 properties_for(
     "MathStructure",
     {
-        # Remove type-specific checks (use instanceof instead)
+        # Remove type-specific checks (use isinstance instead)
         **{f"is{snake_to_pascal(name)}": None for name in structure_types},
         **{
             f: None
