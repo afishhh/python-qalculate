@@ -45,7 +45,7 @@ def take_ident(tokens: Iterable[Token]) -> str:
 
 
 def take_namespaced_name(it: PeekableIterator[Token]) -> str:
-    result = ""
+    result = next(it).text
 
     while (token := it.peek()) is not None:
         if token.type == "whitespace":
@@ -143,10 +143,27 @@ def take_simple_type(it: PeekableIterator[Token]) -> Type:
             const = True
         if token == "volatile":
             volatile = True
+    it.put_back(Token("ident", token))
 
-    result += token
+    found_special = False
 
-    result += take_namespaced_name(it)
+    def match_idents(*args: str) -> bool:
+        peeker = it.peeker()
+        try:
+            for arg in args:
+                if take_ident(peeker) != arg:
+                    return False
+            peeker.commit()
+            return True
+        except StopIteration:
+            return False
+
+    if match_idents("long", "long", "int") or match_idents("long", "long"):
+        result += "long long"
+    elif match_idents("long", "int") or match_idents("long"):
+        result += "long"
+    else:
+        result += take_namespaced_name(it)
 
     if (token := it.peek()) == Token("punct", "<"):
         next(it)
@@ -246,7 +263,7 @@ class Struct(Declaration):
     block: str
     fields: dict[str, Field]
     methods: dict[str, Method]
-    # Preserves order
+    # Preserves declaration order
     members: list[Field | Method]
 
 
@@ -299,16 +316,23 @@ def _parse_struct_block(name: str, block: str, initial_accessibility: Accessibil
                 for _ in consume_block(it):
                     pass
 
-            # Constructor or destructor
-            if take_ident(line) in ("~", name):
-                continue
-
             lit = iter(line)
             is_virtual = take_ident(lit) == "virtual"
             if is_virtual:
                 rest = list(lit)
             else:
                 rest = line
+
+            lit = PeekableIterator(rest)
+            if (token := take_ident(lit)) in ("~", name):
+                # Destructor
+                if token == "~":
+                    continue
+                else:
+                    skip_noncode(lit)
+                    # Constructor
+                    if next(lit).text == "(":
+                        continue
 
             member_type, trest = take_type(rest)
             _, member_name, rest = split_once(trest, lambda t: t.type == "ident")
