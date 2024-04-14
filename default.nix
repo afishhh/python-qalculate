@@ -33,6 +33,8 @@ pkgs.stdenv.mkDerivation (self: {
       };
       dontWrapPythonPrograms = true;
     })
+
+    python3Packages.pytest
   ];
 
   PYQALCULATE_LIBQALCULATE_SOURCE_PATH = "${pkgs.libqalculate.src}";
