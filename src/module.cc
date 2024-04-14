@@ -11,7 +11,7 @@
 
 #include "expression_items.hh"
 #include "generated.hh"
-#include "options.hh"
+#include "wrappers.hh"
 #include "proxies.hh"
 #include "pybind.hh"
 #include "ref.hh"

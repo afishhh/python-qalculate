@@ -223,7 +223,7 @@ with function_declaration("void add_all_enums(pybind11::module_ &m)"):
     for enm in enums:
         impl.write(f"add_{pascal_to_snake(enm)}_enum(m);\n")
 
-impl.write('#include "options.hh"\n')
+impl.write('#include "wrappers.hh"\n')
 
 options("SortOptions")
 options(

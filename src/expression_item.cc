@@ -1,5 +1,5 @@
 #include "expression_items.hh"
-#include "options.hh"
+#include "wrappers.hh"
 
 #include <libqalculate/ExpressionItem.h>
 #include <limits>

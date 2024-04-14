@@ -30,3 +30,11 @@ public:
   std::optional<MathStructureRef> get_isolate_var();
   void set_isolate_var(std::optional<MathStructureRef>);
 };
+
+class PAssumptions final : public Assumptions {
+public:
+  ~PAssumptions() {
+    delete fmin;
+    delete fmax;
+  }
+};

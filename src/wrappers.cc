@@ -1,4 +1,4 @@
-#include "options.hh"
+#include "wrappers.hh"
 
 std::optional<MathStructureRef> PEvaluationOptions::get_isolate_var() {
   if (isolate_var)
