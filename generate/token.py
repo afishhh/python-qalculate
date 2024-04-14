@@ -5,12 +5,16 @@ from typing import Iterable, Iterator, Literal
 from generate.utils import PeekableIterator, find_any, find_any_not
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Token:
     Type = Literal["comment", "punct", "literal", "ident", "whitespace"]
 
     type: Type
     text: str
+
+    def parse_int(self) -> int:
+        assert self.type == "literal"
+        return int(self.text.rstrip("UL"))
 
 
 def tokenize(text: str) -> Iterable[Token]:
@@ -79,6 +83,11 @@ def tokenize(text: str) -> Iterable[Token]:
 
             yield Token("punct", text[:token_length])
             text = text[token_length:]
+        elif text[0] in string.digits:
+            next = find_any(text, identifier_disallowed)
+            assert all(c in string.digits for c in text[:next].rstrip("UL"))
+            yield Token("literal", text[:next])
+            text = text[next:]
         else:
             next = find_any(text, identifier_disallowed)
             yield Token("ident", text[:next])
@@ -90,7 +99,7 @@ def join_tokens(tokens: Iterable[Token]) -> str:
     for token in tokens:
         if token.type == "whitespace":
             result += " "
-        elif token.type in ("ident", "punct"):
+        elif token.type in ("ident", "punct", "literal"):
             result += token.text
     return result.strip()
 
@@ -102,17 +111,28 @@ def consume_block(
     for token in iterator:
         if token.text == starter:
             level += 1
+            yield token
         elif token.text == ender:
             level -= 1
             if level == 0:
                 break
+            yield token
         else:
             yield token
 
 
+def take_meaningful(it: Iterable[Token]):
+    it = iter(it)
+    while True:
+        if (token := next(it)).type not in ("comment", "whitespace"):
+            return token
+
+
 def skip_noncode(it: PeekableIterator[Token]):
-    while (token := it.peek()) is not None and token.type in ("comment", "whitespace"):
-        next(it)
+    try:
+        it.put_back(take_meaningful(it))
+    except StopIteration:
+        pass
 
 
 def filter_noncode(it: Iterable[Token]) -> Iterable[Token]:

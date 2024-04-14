@@ -12,9 +12,10 @@ from .token import (
     filter_noncode,
     join_tokens,
     skip_noncode,
+    take_meaningful,
     tokenize,
 )
-from .utils import PeekableIterator, find, generic_split, reverse_find, split_once
+from .utils import PeekableIterator, find, reverse_find, split_once
 
 
 def find_end_of_block(text: str, start: int = 0) -> int:
@@ -34,17 +35,10 @@ def find_end_of_block(text: str, start: int = 0) -> int:
     return -1
 
 
-def take_ident(tokens: Iterable[Token]) -> str:
-    it = iter(tokens)
-    while True:
-        token = next(it)
-        if token.type == "whitespace":
-            continue
-        else:
-            return token.text
-
-
 def take_namespaced_name(it: PeekableIterator[Token]) -> str:
+    if not (token := it.peek()) or not token.type == "ident":
+        return ""
+
     result = next(it).text
 
     while (token := it.peek()) is not None:
@@ -54,7 +48,7 @@ def take_namespaced_name(it: PeekableIterator[Token]) -> str:
         elif token.text == "::":
             next(it)
             result += "::"
-            result += take_ident(it)
+            result += take_meaningful(it).text
         else:
             break
 
@@ -82,7 +76,7 @@ class SimpleType(Type):
         if self.const:
             result += " const"
         if self.volatile:
-            result += " const"
+            result += " volatile"
 
         return result
 
@@ -105,20 +99,51 @@ class PointerType(Type):
         return result
 
 
+@dataclass(frozen=True, slots=True)
+class ArrayType(Type):
+    inner: Type
+    size: int | None
+
+    def __str__(self) -> str:
+        return f"{self.inner}[{self.size}]"
+
+
 def take_type_list(tokens: Iterable[Token]) -> list[Type]:
     result = []
-    it = iter(tokens)
     while True:
-        result.append(take_type(it)[0])
+        it, tokens = take_type(tokens)
+        result.append(it)
+
+        if not tokens:
+            break
 
         try:
-            while next(it).type in ("comment", "whitespace"):
-                continue
-
-            assert next(it).text == ","
+            it = iter(tokens)
+            assert take_meaningful(it).text == ","
+            tokens = list(it)
         except StopIteration:
             break
     return result
+
+
+def take_cv(it: PeekableIterator[Token]) -> tuple[bool, bool]:
+    const = False
+    volatile = False
+    peeker = it.peeker()
+    try:
+        while (token := take_meaningful(peeker).text) in (
+            "const",
+            "volatile",
+        ):
+            if token == "const":
+                const = True
+            elif token == "volatile":
+                volatile = True
+            peeker.commit()
+    except StopIteration:
+        pass
+
+    return (const, volatile)
 
 
 def take_simple_type(it: PeekableIterator[Token]) -> Type:
@@ -127,7 +152,7 @@ def take_simple_type(it: PeekableIterator[Token]) -> Type:
     result = ""
     targs: list[Type] | None = None
 
-    while (token := take_ident(it)) in (
+    while (token := take_meaningful(it).text) in (
         "class",
         "struct",
         "enum",
@@ -149,14 +174,16 @@ def take_simple_type(it: PeekableIterator[Token]) -> Type:
         peeker = it.peeker()
         try:
             for arg in args:
-                if take_ident(peeker) != arg:
+                if take_meaningful(peeker).text != arg:
                     return False
             peeker.commit()
             return True
         except StopIteration:
             return False
 
-    if match_idents("long", "long", "int") or match_idents("long", "long"):
+    if match_idents("long", "double"):
+        result += "long double"
+    elif match_idents("long", "long", "int") or match_idents("long", "long"):
         result += "long long"
     elif match_idents("long", "int") or match_idents("long"):
         result += "long"
@@ -170,7 +197,7 @@ def take_simple_type(it: PeekableIterator[Token]) -> Type:
 
     peeker = it.peeker()
     try:
-        while (token := take_ident(peeker)) is not None and token in (
+        while (token := take_meaningful(peeker).text) in (
             "const",
             "volatile",
             "signed",
@@ -192,31 +219,27 @@ def take_simple_type(it: PeekableIterator[Token]) -> Type:
 # TODO: Handle function pointers
 #       This may just as well never be implemented.
 def take_type(tokens: Iterable[Token]) -> tuple[Type, Sequence[Token]]:
-    it = PeekableIterator(iter(tokens))
+    it = PeekableIterator(tokens)
     result = take_simple_type(it)
 
-    skip_noncode(it)
-    if (token := it.peek()) is not None and token.text in ("*", "&", "&&"):
-        next(it)
-
-        const = False
-        volatile = False
-        kind = token.text
+    while True:
         peeker = it.peeker()
         try:
-            while (token := take_ident(peeker)) is not None and token in (
-                "const",
-                "volatile",
-            ):
-                if token == "const":
-                    const = True
-                elif token == "volatile":
-                    volatile = True
-                peeker.commit()
+            token = take_meaningful(peeker)
         except StopIteration:
-            pass
+            break
 
-        result = PointerType(const=const, volatile=volatile, inner=result, kind=kind)
+        if token.text in ("*", "&", "&&"):
+            peeker.commit()
+
+            const, volatile = take_cv(it)
+            kind = token.text
+
+            result = PointerType(
+                const=const, volatile=volatile, inner=result, kind=kind
+            )
+        else:
+            break
 
     return (result, list(it))
 
@@ -311,8 +334,77 @@ class Enum(Declaration):
     members: list[EnumVariant]
 
 
-def _parse_struct_block(name: str, block: str, initial_accessibility: Accessibility, bases: list[Struct.Base]):
-    result = Struct(name=name, block=block, bases=bases, fields={}, methods={}, members=[])
+def _parse_function_params(tokens: Sequence[Token]) -> list[Parameter | Literal["..."]]:
+    # C-style no-argument function declaration
+    if tokens == [Token(type="ident", text="void")]:
+        return []
+
+    result = []
+
+    while tokens:
+        if tokens[0].text == "...":
+            result.append("...")
+            if len(tokens) > 1:
+                assert tokens[1].text == ","
+                tokens = tokens[2:]
+            else:
+                tokens = tokens[1:]
+            continue
+
+        param_type, tokens = take_type(tokens)
+
+        it = PeekableIterator(tokens)
+        if (token := it.peek()) and token.text == "(":
+            return []
+
+        if (token := it.peek()) and token.type == "ident":
+            param_name = token.text
+            next(it)
+        else:
+            param_name = None
+
+        if (token := it.peek()) and token.text == "[":
+            next(it)
+            param_type = ArrayType(param_type, size=int(next(it).parse_int()))
+            assert next(it).text == "]"
+
+        if (token := it.peek()) and token.text == "=":
+            next(it)
+
+            default_tokens = []
+
+            for token in it:
+                if token.text == ",":
+                    it.put_back(token)
+                    break
+                else:
+                    default_tokens.append(token)
+
+            param_default = join_tokens(default_tokens)
+        else:
+            param_default = None
+
+        try:
+            assert next(it).text == ","
+        except StopIteration:
+            pass
+
+        tokens = list(it)
+
+        result.append(Parameter(param_type, param_name, param_default))
+
+    return result
+
+
+def _parse_struct_block(
+    name: str,
+    block: str,
+    initial_accessibility: Accessibility,
+    bases: list[Struct.Base],
+):
+    result = Struct(
+        name=name, block=block, bases=bases, fields={}, methods={}, members=[]
+    )
 
     code = block.strip().removeprefix("{").removesuffix("}")
     tokens = tokenize(code)
@@ -346,7 +438,7 @@ def _parse_struct_block(name: str, block: str, initial_accessibility: Accessibil
                     pass
 
             lit = iter(line)
-            is_virtual = take_ident(lit) == "virtual"
+            is_virtual = take_meaningful(lit).text == "virtual"
             if is_virtual:
                 rest = list(lit)
             else:
@@ -354,7 +446,7 @@ def _parse_struct_block(name: str, block: str, initial_accessibility: Accessibil
 
             member_name = None
             lit = PeekableIterator(rest)
-            if (token := take_ident(lit)) in ("~", name):
+            if (token := take_meaningful(lit).text) in ("~", name):
                 # Destructor
                 if token == "~":
                     member_name = "<destructor>"
@@ -375,7 +467,12 @@ def _parse_struct_block(name: str, block: str, initial_accessibility: Accessibil
                 member_name = member_name.text
 
             if (args_start := find(rest, lambda t: t.text == "(")) != -1:
-                args_end = reverse_find(rest, lambda t: t.text == ")")
+                last_paren = reverse_find(rest, lambda t: t.text == ")")
+                last_colon = reverse_find(rest, lambda t: t.text == ":")
+                if last_colon < last_paren:
+                    args_end = reverse_find(rest, lambda t: t.text == ")", last_colon)
+                else:
+                    args_end = last_paren
 
                 # This fixes operator names (otherwise the operator punctuation would be skipped)
                 if trest:
@@ -393,48 +490,17 @@ def _parse_struct_block(name: str, block: str, initial_accessibility: Accessibil
                     args_end,
                 )
 
+                rest = list(filter_noncode(rest[args_start + 1 : args_end]))
                 method = Struct.Method(
                     accessibility=access,
                     docstring=current_comment.strip(),
                     return_type=member_type,
                     name=member_name,
-                    params=[],
+                    params=_parse_function_params(rest),
                     const=const_idx != -1,
                     virtual=is_virtual,
                 )
                 current_comment = ""
-
-                rest = rest[args_start + 1 : args_end]
-
-                # C-style no-argument function declaration
-                if list(filter_noncode(rest)) == [Token(type="ident", text="void")]:
-                    rest = []
-
-                # FIXME: This technically mishandles parameters that
-                #        pass multiple template parameters to their types.
-                for param_tokens in generic_split(rest, Token(type="punct", text=",")):
-                    if not param_tokens:
-                        continue
-                    if param_tokens[-1].text == "...":
-                        method.params.append("...")
-                        continue
-
-                    param_type, param_tokens = take_type(param_tokens)
-                    param_name = None
-                    try:
-                        param_name = take_ident(param_tokens)
-                    except StopIteration:
-                        pass
-
-                    eq_idx = find(param_tokens, lambda token: token.text == "=")
-
-                    param_default = None
-                    if eq_idx != -1:
-                        param_default = join_tokens(param_tokens[eq_idx + 1 :])
-
-                    method.params.append(
-                        Parameter(param_type, param_name, param_default)
-                    )
 
                 result.methods[method.name] = method
                 result.members.append(method)

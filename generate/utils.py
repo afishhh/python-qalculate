@@ -170,7 +170,7 @@ class PeekableIterator(Iterator[T]):
             return next(self._inner)
 
     def put_back(self, item: T):
-        self._queue.append(item)
+        self._queue.appendleft(item)
 
     def peek(self) -> T | None:
         if self._queue:

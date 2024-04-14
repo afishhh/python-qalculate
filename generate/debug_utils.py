@@ -2,7 +2,7 @@ from generate.parsing import Struct
 
 
 def pprint_structure(structure: Struct):
-    print(structure.name, end=" ")
+    print("struct", structure.name, end=" ")
 
     if structure.bases:
         print(":", end="")
@@ -36,7 +36,9 @@ def pprint_structure(structure: Struct):
                 if param == "...":
                     print("...", end="")
                 else:
-                    print(param.type, param.name, end="")
+                    print(param.type, end="")
+                    if param.name:
+                        print(f" {param.name}", end="")
                     if param.default:
                         print(" =", param.default, end="")
             print(")", end="")
