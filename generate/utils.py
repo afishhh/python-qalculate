@@ -136,6 +136,8 @@ def camel_to_snake(name: str):
         name = name[:i] + "_" + name[i].lower() + name[i + 1 :]
     return name
 
+def camel_to_pascal(name: str):
+    return name[0].upper() + name[1:]
 
 def pascal_to_snake(name: str):
     name = name[0].lower() + name[1:]

@@ -52,37 +52,76 @@ def function_declaration(signature: str):
     impl.dedent()
     impl.write(f"}}\n")
 
-
-def process_simple_properties(
-    name: str,
-    struct: Struct,
-    renames: dict[str, str | None] = {},
-    qalc_class: bool = False,
+def iter_properties(
+    struct: Struct, *, require_getter_const: bool = True, exclude: set[str] = set()
 ):
-    class_type = (
-        f"pybind11::class_<{name}>" if not qalc_class else f"qalc_class_<{name}>"
-    )
+    for member in struct.methods.values():
+        if (
+            member.params == []
+            and (member.const or not require_getter_const)
+            and not member.is_operator
+            and not member.name in exclude
+        ):
+            yield member
 
+
+def properties_for(
+    name: str,
+    *,
+    allow_readwrite: bool = False,
+    require_getter_const: bool = True,
+    renames: dict[str, str | None] = {},
+    pybind_class: str | None = None,
+    add_repr_from_rw: bool = False
+):
+    class_type = f"pybind11::class_<{name}>" if not pybind_class else pybind_class
+
+    struct = qalculate_sources.structure(name)
     with function_declaration(
         f"{class_type} &add_{pascal_to_snake(name)}_properties({class_type} &class_)"
     ):
         with impl.indent("return class_\n"):
-            for member in struct.methods.values():
-                if (
-                    member.params != []
-                    or not member.const
-                    or member.is_operator
-                ):
-                    continue
+            added_rw_props = []
 
+            for member in iter_properties(
+                struct, require_getter_const=require_getter_const
+            ):
                 mapped = renames.get(member.name, camel_to_snake(member.name))
                 if mapped is None:
                     continue
 
-                impl.write(
-                    f'.def_property_readonly("{mapped}", &{name}::{member.name})\n'
-                )
+                setter = struct.methods.get(f"set{camel_to_pascal(member.name)}", None)
+                if setter and len(setter.params) == 1 and allow_readwrite:
+                    impl.write(
+                        f'.def_property("{mapped}", &{name}::{member.name}, &{name}::{setter.name})\n'
+                    )
+
+                    added_rw_props.append(mapped)
+                else:
+                    impl.write(
+                        f'.def_property_readonly("{mapped}", &{name}::{member.name})\n'
+                    )
+
+            define_repr(name, added_rw_props)
         impl.write(";\n")
+
+
+def define_repr(
+    name: str,
+    properties: Iterable[str],
+):
+    with impl.indent(f'.def("__repr__", [](py::object s) {{\n'):
+        impl.write(f'std::string output = "{name}(";\n')
+        impl.write(f"output.reserve(512);\n")
+        for i, name in enumerate(properties):
+            if i != 0:
+                impl.write(f'output += ", ";\n')
+            impl.write(f'output += "{name}=";\n')
+            impl.write(
+                f'output += s.attr("{name}").attr("__repr__")().cast<std::string_view>();\n'
+            )
+        impl.write("return output;\n")
+    impl.write("})\n")
 
 
 def process_options_declaration(
@@ -137,18 +176,7 @@ def process_options_declaration(
                 impl.write(f', py::arg("{field}") = {defaults_name}.{field}')
             impl.write(")\n")
 
-            with impl.indent(f'.def("__repr__", [](py::object s) {{\n'):
-                impl.write(f'std::string output = "{name}(";\n')
-                impl.write(f"output.reserve(512);\n")
-                for i, (field, type) in enumerate(options):
-                    if i != 0:
-                        impl.write(f'output += ", ";\n')
-                    impl.write(f'output += "{field}=";\n')
-                    impl.write(
-                        f'output += s.attr("{field}").attr("__repr__")().cast<std::string_view>();\n'
-                    )
-                impl.write("return output;\n")
-            impl.write("})\n")
+            define_repr(name, (n for n, _ in options))
         impl.write(";\n")
 
 
@@ -212,6 +240,8 @@ for name in (
     "DateTimeFormat",
     "IntervalDisplay",
     "ComparisonResult",
+    "AssumptionType",
+    "AssumptionSign",
 ):
     enum(name)
 enum("AutomaticFractionFormat", "AUTOMATIC_FRACTION_")
@@ -243,16 +273,9 @@ options(
 )
 
 
-def properties_for(
-    name: str, renames: dict[str, str | None] = {}, qalc_class: bool = False
-):
-    declaration = qalculate_sources.structure(name)
-    process_simple_properties(name, declaration, renames, qalc_class)
-
-
 properties_for(
     "Number",
-    {
+    renames={
         "llintValue": None,
         "floatValue": None,
         "integer": None,
@@ -275,7 +298,7 @@ structure_types.remove("ABORTED")
 
 properties_for(
     "MathStructure",
-    {
+    renames={
         # Remove type-specific checks (use isinstance instead)
         **{f"is{snake_to_pascal(name)}": None for name in structure_types},
         **{
@@ -299,7 +322,7 @@ properties_for(
             )
         },
     },
-    qalc_class=True,
+    pybind_class="qalc_class_<MathStructure>",
 )
 
 
@@ -496,8 +519,14 @@ process_options_declaration(
 
 properties_for(
     "ExpressionItem",
-    {"refcount": None, "type": None, "subtype": None, "id": None, "countNames": None},
-    qalc_class=True,
+    renames={
+        "refcount": None,
+        "type": None,
+        "subtype": None,
+        "id": None,
+        "countNames": None,
+    },
+    pybind_class="qalc_class_<ExpressionItem>",
 )
 
 BUILTIN_FUNCTION_REGEX = re.compile(
@@ -510,6 +539,14 @@ with function_declaration("void add_builtin_functions(py::module_ &m)"):
     ):
         name, id = match.groups()
         impl.write(f'(void)qalc_class_<{name}, MathFunction>(m, "{name}");\n')
+
+properties_for(
+    "Assumptions",
+    allow_readwrite=True,
+    require_getter_const=False,
+    pybind_class="pybind11::class_<class PAssumptions>",
+    add_repr_from_rw=True
+)
 
 header.close()
 impl.close()

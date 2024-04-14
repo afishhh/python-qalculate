@@ -175,3 +175,16 @@ qalc_class_<MathFunction> add_math_function(py::module_ &m) {
             (MathStructure &)vargs, (EvaluationOptions const &)options));
       });
 }
+
+py::class_<PAssumptions> &add_assumptions(py::module_ &m) {
+  return add_assumptions_properties(
+      py::class_<PAssumptions>(m, "Assumptions")
+          .def(py::init([](AssumptionType type, AssumptionSign sign) {
+                 PAssumptions assumptions;
+                 assumptions.setType(type);
+                 assumptions.setSign(sign);
+                 return assumptions;
+               }),
+               py::arg("type") = ASSUMPTION_TYPE_NUMBER,
+               py::arg("sign") = ASSUMPTION_SIGN_UNKNOWN));
+}

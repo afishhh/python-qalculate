@@ -185,6 +185,7 @@ PYBIND11_MODULE(qalculate, m) {
   add_expression_item(m);
   add_math_function(m);
   add_builtin_functions(m);
+  add_assumptions(m);
 
   py::implicitly_convertible<MathFunction, MathStructureFunctionProxy>();
 
