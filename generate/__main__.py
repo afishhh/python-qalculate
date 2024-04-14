@@ -13,7 +13,7 @@ qalculate_sources = ParsedSourceFiles(libqalculate_src.glob("*.h"))
 
 MATH_STRUCTURE_CLASS = "qalc_class_<MathStructure>"
 
-
+output_directory.mkdir(exist_ok=True)
 header = IndentedWriter((output_directory / "generated.hh").open("w+"))
 impl = IndentedWriter((output_directory / "generated.cc").open("w+"))
 
