@@ -184,8 +184,18 @@ PYBIND11_MODULE(qalculate, m) {
           .def(py::self += py::self)
           .def(py::self - py::self)
           .def(decltype(py::self)() -= py::self)
-          .def(py::self ^ py::self)
-          .def(decltype(py::self)() ^= py::self)
+
+          // Number ^ Number is actually exponentiation not a bitwise xor!
+          .def(
+              "__pow__",
+              [](Number const &self, Number const &other) {
+                return self ^ other;
+              },
+              py::is_operator{})
+          .def(
+              "__ipow__",
+              [](Number &self, Number const &other) { self ^= other; },
+              py::is_operator{})
 
           .def(py::self == py::self)
           .def(py::self != py::self)
