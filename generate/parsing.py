@@ -461,19 +461,23 @@ def _parse_struct_block(
                 _, member_name, rest = split_once(trest, lambda t: t.type == "ident")
                 member_name = member_name.text
 
+                if member_name == "operator":
+                    rit = iter(rest)
+                    token = take_meaningful(rit)
+                    member_name += token.text
+                    # operator()
+                    if token.text == "(":
+                        member_name += take_meaningful(rit).text
+                    rest = list(rit)
+
+
             if (args_start := find(rest, lambda t: t.text == "(")) != -1:
                 last_paren = reverse_find(rest, lambda t: t.text == ")")
                 last_colon = reverse_find(rest, lambda t: t.text == ":")
-                if last_colon < last_paren:
+                if last_colon != -1 and last_colon < last_paren:
                     args_end = reverse_find(rest, lambda t: t.text == ")", last_colon)
                 else:
                     args_end = last_paren
-
-                # This fixes operator names (otherwise the operator punctuation would be skipped)
-                if trest:
-                    member_name = join_tokens(
-                        trest[: find(trest, lambda t: t.text == "(")]
-                    ).replace(" ", "")
 
                 # FIXME: *This is a field* whose type is a function pointer...
                 if member_name == "":
