@@ -82,12 +82,13 @@ qalc_class_<ExpressionItem> add_expression_item(py::module_ &m) {
                                         }))
       .def_static(
           "get",
-          [](std::string_view name) -> std::optional<ExpressionItem *> {
+          [](std::string_view name) -> QalcRef<ExpressionItem> {
             // TODO: How useful is the second argument?
             auto ptr = CALCULATOR->getExpressionItem(std::string(name));
             if (!ptr)
-              return std::nullopt;
-            return ptr;
+              throw py::key_error("ExpressionItem with name " +
+                                  std::string(name) + " does not exist");
+            return QalcRef(ptr);
           },
           py::arg("name"), py::pos_only{})
       // NOTE: While this function does accept extra arguments in libqalculate
@@ -101,7 +102,7 @@ qalc_class_<ExpressionItem> add_expression_item(py::module_ &m) {
       .DEF_PREFERRED_NAME("preferred_display_name", preferredDisplayName)
       .def_property(
           "title",
-          [](ExpressionItem const &self) -> std::optional<std::string> {
+          [](ExpressionItem const &self) -> std::string {
             return self.title(false);
           },
           [](ExpressionItem &self, std::string_view title) {
@@ -112,7 +113,7 @@ qalc_class_<ExpressionItem> add_expression_item(py::module_ &m) {
           [](ExpressionItem const &item, std::optional<bool> abbreviation,
              std::optional<bool> use_unicode, std::optional<bool> plural,
              std::function<bool(char const *)> can_display_unicode_string)
-              -> std::optional<std::reference_wrapper<ExpressionName const>> {
+              -> ExpressionName const & {
             int i_abbreviation =
                 abbreviation.has_value() ? abbreviation.value() : -1;
             int i_use_unicode =
@@ -125,8 +126,8 @@ qalc_class_<ExpressionItem> add_expression_item(py::module_ &m) {
                                          i_plural, fun, data);
 
             if (&result == &empty_expression_name)
-              return std::nullopt;
-            return {std::ref(result)};
+              throw py::key_error("Name not found");
+            return result;
           },
           py::return_value_policy::reference_internal, py::kw_only{},
           py::arg("abbreviation") =
@@ -146,11 +147,12 @@ qalc_class_<MathFunction> add_math_function(py::module_ &m) {
            py::arg("math_structure"), py::pos_only{})
       .def_static(
           "get",
-          [](std::string_view name) -> std::optional<MathFunction *> {
+          [](std::string_view name) -> QalcRef<MathFunction> {
             auto ptr = CALCULATOR->getFunction(std::string(name));
             if (!ptr)
-              return std::nullopt;
-            return ptr;
+              throw py::key_error("MathFunction with name " +
+                                  std::string(name) + " does not exist");
+            return QalcRef(ptr);
           },
           py::arg("name"), py::pos_only{})
       .def(
