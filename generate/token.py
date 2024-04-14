@@ -105,10 +105,10 @@ def join_tokens(tokens: Iterable[Token]) -> str:
 
 
 def consume_block(
-    iterator: Iterator[Token], starter: str = "{", ender: str = "}"
+    it: Iterable[Token], starter: str = "{", ender: str = "}"
 ) -> Iterable[Token]:
     level = 1
-    for token in iterator:
+    for token in it:
         if token.text == starter:
             level += 1
             yield token

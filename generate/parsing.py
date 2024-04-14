@@ -36,7 +36,7 @@ def find_end_of_block(text: str, start: int = 0) -> int:
 
 
 def take_namespaced_name(it: PeekableIterator[Token]) -> str:
-    if not (token := it.peek()) or not token.type == "ident":
+    if (token := it.peek()) is None or token.type != "ident":
         return ""
 
     result = next(it).text
@@ -152,7 +152,7 @@ def take_simple_type(it: PeekableIterator[Token]) -> Type:
     result = ""
     targs: list[Type] | None = None
 
-    while (token := take_meaningful(it).text) in (
+    while (token := take_meaningful(it)).text in (
         "class",
         "struct",
         "enum",
@@ -161,14 +161,14 @@ def take_simple_type(it: PeekableIterator[Token]) -> Type:
         "unsigned",
         "signed",
     ):
-        if token in ("unsigned", "signed"):
-            result += token
+        if token.text in "unsigned":
+            result += token.text
             result += " "
-        if token == "const":
+        if token.text == "const":
             const = True
-        if token == "volatile":
+        if token.text == "volatile":
             volatile = True
-    it.put_back(Token("ident", token))
+    it.put_back(token)
 
     def match_idents(*args: str) -> bool:
         peeker = it.peeker()
@@ -190,6 +190,8 @@ def take_simple_type(it: PeekableIterator[Token]) -> Type:
     else:
         result += take_namespaced_name(it)
 
+    result = result.strip()
+
     if (token := it.peek()) == Token("punct", "<"):
         next(it)
         block = list(consume_block(it, "<", ">"))
@@ -203,7 +205,7 @@ def take_simple_type(it: PeekableIterator[Token]) -> Type:
             "signed",
             "unsigned",
         ):
-            if token == ("signed", "unsigned"):
+            if token == "unsigned":
                 result = f"{token} {result}"
             elif token == "const":
                 const = True
@@ -312,7 +314,6 @@ class Struct(Declaration):
         virtual: bool
         name: str
 
-    block: str
     bases: list[Base]
     fields: dict[str, Field]
     methods: dict[str, Method]
@@ -328,7 +329,6 @@ class EnumVariant:
 
 @dataclass(frozen=True, slots=True)
 class Enum(Declaration):
-    block: str
     variants: dict[str, EnumVariant]
     # Preserves declaration order
     members: list[EnumVariant]
@@ -398,16 +398,11 @@ def _parse_function_params(tokens: Sequence[Token]) -> list[Parameter | Literal[
 
 def _parse_struct_block(
     name: str,
-    block: str,
+    tokens: list[Token],
     initial_accessibility: Accessibility,
     bases: list[Struct.Base],
 ):
-    result = Struct(
-        name=name, block=block, bases=bases, fields={}, methods={}, members=[]
-    )
-
-    code = block.strip().removeprefix("{").removesuffix("}")
-    tokens = tokenize(code)
+    result = Struct(name=name, bases=bases, fields={}, methods={}, members=[])
 
     it = iter(tokens)
     access = initial_accessibility
@@ -518,11 +513,8 @@ def _parse_struct_block(
     return result
 
 
-def _parse_enum_block(name: str, block: str) -> Enum:
-    code = block.strip().removeprefix("{").removesuffix("}")
-    tokens = tokenize(code)
-
-    result = Enum(name=name, block=block, variants={}, members=[])
+def _parse_enum_block(name: str, tokens: list[Token]) -> Enum:
+    result = Enum(name=name, variants={}, members=[])
 
     it = PeekableIterator(tokens)
     current_comment = ""
@@ -595,15 +587,14 @@ def _strip_macro_declarations(text: str) -> str:
 class ParsedSourceFile(ParsedSource):
     def _extract_declarations(
         self, text: str
-    ) -> Iterable[tuple[str, str, str, list[Struct.Base]]]:
+    ) -> Iterable[tuple[str, str, list[Token], list[Struct.Base]]]:
         pattern = re.compile(
             r"(struct|enum|class)\s+([a-zA-Z_0-9]+)\s*(?::\s*((?:(public|protected|private|virtual)\s+)*([a-zA-Z_0-9]+)(?:\s*,\s*(?:(public|protected|private|virtual)\s+)*([a-zA-Z_0-9]+))*))?\s*{",
             re.MULTILINE,
         )
         for match in pattern.finditer(text):
             keyword, name, bases, *_ = match.groups()
-            block_end = find_end_of_block(text, match.end() - 1)
-            assert block_end != -1
+            block = list(consume_block(tokenize(text[match.end() :])))
 
             parsed_bases = []
             for base in (bases or "").split(","):
@@ -624,17 +615,30 @@ class ParsedSourceFile(ParsedSource):
             yield (
                 keyword,
                 name,
-                text[match.end() : block_end + 1].strip(),
+                block,
                 parsed_bases,
             )
 
+        # TODO: Bring this up to the above cases standards
         pattern = re.compile("typedef\\s+(struct|enum|class)\\s+", re.MULTILINE)
         for match in pattern.finditer(text):
             (keyword,) = match.groups()
             end = find_end_of_block(text, match.end())
             assert end != -1
             name = text[end:].split(maxsplit=2)[1].removesuffix(";")
-            yield (keyword, name, text[match.end() : end + 1].strip(), [])
+            yield (
+                keyword,
+                name,
+                list(
+                    tokenize(
+                        text[match.end() : end + 1]
+                        .strip()
+                        .removeprefix("{")
+                        .removesuffix("}")
+                    )
+                ),
+                [],
+            )
 
     def __init__(self, text: Path | str, filename: str | None = None) -> None:
         if isinstance(text, Path):
