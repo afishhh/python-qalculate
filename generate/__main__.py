@@ -4,7 +4,7 @@ import re
 from contextlib import contextmanager
 import sys
 
-from .parsing import Accessibility, Enum, ParsedSourceFiles, SimpleType, Struct
+from .parsing import Accessibility, ParsedSourceFiles, SimpleType, Struct
 from .utils import *
 # from .debug_utils import pprint_structure
 
@@ -52,6 +52,7 @@ def function_declaration(signature: str):
     impl.dedent()
     impl.write(f"}}\n")
 
+
 def iter_properties(
     struct: Struct, *, require_getter_const: bool = True, exclude: set[str] = set()
 ):
@@ -72,7 +73,7 @@ def properties_for(
     require_getter_const: bool = True,
     renames: dict[str, str | None] = {},
     pybind_class: str | None = None,
-    add_repr_from_rw: bool = False
+    add_repr_from_rw: bool = False,
 ):
     class_type = f"pybind11::class_<{name}>" if not pybind_class else pybind_class
 
@@ -102,7 +103,8 @@ def properties_for(
                         f'.def_property_readonly("{mapped}", &{name}::{member.name})\n'
                     )
 
-            define_repr(name, added_rw_props)
+            if add_repr_from_rw:
+                define_repr(name, added_rw_props)
         impl.write(";\n")
 
 
@@ -124,10 +126,10 @@ def define_repr(
     impl.write("})\n")
 
 
-def process_options_declaration(
+def options(
     name: str,
-    struct: Struct,
-    exclude: set[str],
+    *,
+    exclude: set[str] = set(),
     override_class=None,
     func_name=None,
     define_new_default=False,
@@ -143,6 +145,7 @@ def process_options_declaration(
         impl.write(f"{name} {defaults_name};\n")
 
     pybind_class = f"pybind11::class_<{override_class or name}>"
+    struct = qalculate_sources.structure(name)
 
     with function_declaration(f"{pybind_class} {func_name}(pybind11::module_ &m)"):
         with impl.indent(f'return {pybind_class}(m, "{name}")\n'):
@@ -180,7 +183,14 @@ def process_options_declaration(
         impl.write(";\n")
 
 
-def process_enum_declaration(name: str, enum: Enum, prefix: str):
+enums: list[str] = []
+
+def enum(name: str, prefix: str | None = None):
+    enums.append(name)
+    enum = qalculate_sources.enum(name)
+    if prefix is None:
+        prefix = f"{pascal_to_snake(name).upper()}_"
+
     with function_declaration(
         f"pybind11::enum_<{name}> add_{pascal_to_snake(name)}_enum(pybind11::module_ &m)"
     ):
@@ -200,21 +210,6 @@ def process_enum_declaration(name: str, enum: Enum, prefix: str):
                 )
         impl.write(";\n")
 
-
-enums: list[str] = []
-
-
-def enum(name: str, prefix: str | None = None):
-    enums.append(name)
-    if prefix is None:
-        prefix = f"{pascal_to_snake(name).upper()}_"
-    declaration = qalculate_sources.enum(name)
-    return process_enum_declaration(name, declaration, prefix)
-
-
-def options(name: str, exclude: set[str] = set(), **kwargs):
-    declaration = qalculate_sources.structure(name)
-    return process_options_declaration(name, declaration, exclude, **kwargs)
 
 
 enum("ApproximationMode", "APPROXIMATION_")
@@ -258,17 +253,17 @@ impl.write('#include "wrappers.hh"\n')
 options("SortOptions")
 options(
     "PrintOptions",
-    {
+    exclude={
         "prefix",
         "is_approximate",
         "can_display_unicode_string_arg",
         "can_display_unicode_string_function",
     },
 )
-options("ParseOptions", {"unended_function", "default_dataset"})
+options("ParseOptions", exclude={"unended_function", "default_dataset"})
 options(
     "EvaluationOptions",
-    {"isolate_var", "protected_function"},
+    exclude={"isolate_var", "protected_function"},
     override_class="class PEvaluationOptions",
 )
 
@@ -507,11 +502,9 @@ with header.indent("template <> struct polymorphic_type_hook<MathStructure> {\n"
     header.write("}\n")
 header.write("};\n}\n")
 
-struct = qalculate_sources.structure("ExpressionName")
-process_options_declaration(
+options(
     "ExpressionName",
-    struct,
-    {"priv"},
+    exclude={"priv"},
     func_name="add_expression_name_auto",
     define_new_default=True,
     pass_by_type={"std::string": "std::string_view"},
@@ -545,7 +538,7 @@ properties_for(
     allow_readwrite=True,
     require_getter_const=False,
     pybind_class="pybind11::class_<class PAssumptions>",
-    add_repr_from_rw=True
+    add_repr_from_rw=True,
 )
 
 header.close()
