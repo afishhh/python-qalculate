@@ -1,9 +1,8 @@
 from typing import Callable
 import pytest
-from qalculate import Number, set_precision
+from qalculate import Number
 from random import randint
 
-set_precision(100)
 
 def test_small_conversion():
     for _ in range(1000):
