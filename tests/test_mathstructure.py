@@ -3,6 +3,7 @@ from qalculate import (
     ApproximationMode,
     EvaluationOptions,
     MathStructure as S,
+    MathFunction as MF,
     parse,
 )
 
@@ -48,3 +49,15 @@ exact_options = EvaluationOptions(
 )
 def test_simple_equations(equation: str, expected: str):
     assert parse(equation).calculate(exact_options).print() == expected
+
+
+@pytest.mark.parametrize(
+    "string,expected",
+    [
+        ("sin", S.Function(MF.get("sin"))),
+        ("gamma10", S.Function(MF.get("gamma"), S.Number(10))),
+        ("log(512, 4)", S.Function(MF.get("log"), S.Number(512), S.Number(4))),
+    ],
+)
+def test_function_parsing(string: str, expected: S):
+    assert parse(string) == expected
