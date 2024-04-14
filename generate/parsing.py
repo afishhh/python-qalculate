@@ -334,7 +334,7 @@ class Enum(Declaration):
     members: list[EnumVariant]
 
 
-def _parse_function_params(tokens: Sequence[Token]) -> list[Parameter | Literal["..."]]:
+def _parse_function_params(tokens: Sequence[Token]) -> list[Parameter | Literal["..."]] | None:
     # C-style no-argument function declaration
     if tokens == [Token(type="ident", text="void")]:
         return []
@@ -355,7 +355,7 @@ def _parse_function_params(tokens: Sequence[Token]) -> list[Parameter | Literal[
 
         it = PeekableIterator(tokens)
         if (token := it.peek()) and token.text == "(":
-            return []
+            return None
 
         if (token := it.peek()) and token.type == "ident":
             param_name = token.text
@@ -490,19 +490,24 @@ def _parse_struct_block(
                 )
 
                 rest = list(filter_noncode(rest[args_start + 1 : args_end]))
-                method = Struct.Method(
-                    accessibility=access,
-                    docstring=current_comment.strip(),
-                    return_type=member_type,
-                    name=member_name,
-                    params=_parse_function_params(rest),
-                    const=const_idx != -1,
-                    virtual=is_virtual,
-                )
-                current_comment = ""
+                params = _parse_function_params(rest)
+                if params is not None:
+                    method = Struct.Method(
+                        accessibility=access,
+                        docstring=current_comment.strip(),
+                        return_type=member_type,
+                        name=member_name,
+                        params=params,
+                        const=const_idx != -1,
+                        virtual=is_virtual,
+                    )
+                    current_comment = ""
 
-                result.methods[method.name] = method
-                result.members.append(method)
+                    result.methods[method.name] = method
+                    result.members.append(method)
+                else:
+                    print(f"warning: ignoring {name}.{member_name} because it takes a function pointer parameter")
+                    current_comment = ""
             else:
                 field = Struct.Field(
                     docstring=current_comment.strip(),

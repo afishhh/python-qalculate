@@ -4,7 +4,12 @@ import re
 from contextlib import contextmanager
 import sys
 
-from .parsing import Accessibility, ParsedSourceFiles, SimpleType, Struct
+from .parsing import (
+    Accessibility,
+    ParsedSourceFiles,
+    SimpleType,
+    Struct,
+)
 from .utils import *
 
 libqalculate_src = Path(sys.argv[1]) / "libqalculate"
@@ -50,6 +55,7 @@ def iter_properties(
             and (member.const or not require_getter_const)
             and not member.is_operator
             and not member.name in exclude
+            and member.return_type != SimpleType("void")
         ):
             yield member
 
@@ -272,11 +278,8 @@ properties_for(
 
 struct = qalculate_sources.enum("StructureType")
 structure_types = []
-for line in struct.block.splitlines()[1:-1]:
-    line = line.strip().removesuffix(",")
-    if all(c in string.ascii_letters + string.digits + "_" for c in line):
-        name = line.removeprefix("STRUCT_")
-        structure_types.append(name)
+for variant in struct.members:
+    structure_types.append(variant.name.removeprefix("STRUCT_"))
 structure_types.remove("ABORTED")
 
 properties_for(
