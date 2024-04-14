@@ -145,8 +145,6 @@ def take_simple_type(it: PeekableIterator[Token]) -> Type:
             volatile = True
     it.put_back(Token("ident", token))
 
-    found_special = False
-
     def match_idents(*args: str) -> bool:
         peeker = it.peeker()
         try:
@@ -266,6 +264,14 @@ class Struct(Declaration):
                 self.name.startswith("operator") and self.name[8] in string.punctuation
             )
 
+        @property
+        def is_constructor(self) -> bool:
+            return self.name == "<constructor>"
+
+        @property
+        def is_destructor(self) -> bool:
+            return self.name == "<destructor>"
+
     block: str
     fields: dict[str, Field]
     methods: dict[str, Method]
@@ -331,28 +337,36 @@ def _parse_struct_block(name: str, block: str, initial_accessibility: Accessibil
             else:
                 rest = line
 
+            member_name = None
             lit = PeekableIterator(rest)
             if (token := take_ident(lit)) in ("~", name):
                 # Destructor
                 if token == "~":
-                    continue
+                    member_name = "<destructor>"
+                    rest = list(lit)
                 else:
                     skip_noncode(lit)
                     # Constructor
-                    if next(lit).text == "(":
-                        continue
+                    if lit.peek() == Token("punct", "("):
+                        member_name = "<constructor>"
+                        rest = list(lit)
 
-            member_type, trest = take_type(rest)
-            _, member_name, rest = split_once(trest, lambda t: t.type == "ident")
-            member_name = member_name.text
+            if member_name:
+                member_type = SimpleType("void")
+                trest = None
+            else:
+                member_type, trest = take_type(rest)
+                _, member_name, rest = split_once(trest, lambda t: t.type == "ident")
+                member_name = member_name.text
 
             if (args_start := find(rest, lambda t: t.text == "(")) != -1:
                 args_end = reverse_find(rest, lambda t: t.text == ")")
 
                 # This fixes operator names (otherwise the operator punctuation would be skipped)
-                member_name = join_tokens(
-                    trest[: find(trest, lambda t: t.text == "(")]
-                ).replace(" ", "")
+                if trest:
+                    member_name = join_tokens(
+                        trest[: find(trest, lambda t: t.text == "(")]
+                    ).replace(" ", "")
 
                 # FIXME: *This is a field* whose type is a function pointer...
                 if member_name == "":
@@ -479,13 +493,31 @@ class ParsedSource(ABC):
         return decl
 
 
+def _strip_macro_declarations(text: str) -> str:
+    it = text.splitlines()
+    result = []
+    macro_continued = False
+    for line in it:
+        if macro_continued:
+            macro_continued = line.rstrip().endswith("\\")
+            continue
+        tmp = line.lstrip()
+        if tmp.startswith("#"):
+            if tmp.removeprefix("#").lstrip().removeprefix("define"):
+                if tmp.rstrip().endswith("\\"):
+                    macro_continued = True
+                continue
+        result.append(line)
+    return "\n".join(result)
+
+
 class ParsedSourceFile(ParsedSource):
     def _extract_declarations(self, text: str) -> Iterable[tuple[str, str, str]]:
         pattern = re.compile(
-            "(struct|enum|class)\\s+([a-zA-Z_0-9]+)\\s+{", re.MULTILINE
+            r"(struct|enum|class)\s+([a-zA-Z_0-9]+)\s*(:\s*((public|virtual|private)\s+)?[a-zA-Z_0-9]+(\s*,\s*((public|virtual|private)\s+)?[a-zA-Z_0-9]+)*)?\s*{"
         )
         for match in pattern.finditer(text):
-            keyword, name = match.groups()
+            keyword, name = match.groups()[:2]
             block_end = find_end_of_block(text, match.end() - 1)
             assert block_end != -1
             yield (keyword, name, text[match.end() : block_end + 1].strip())
@@ -507,7 +539,7 @@ class ParsedSourceFile(ParsedSource):
         self._text = text
         self._declarations: dict[str, Declaration] = {}
 
-        for a, b, c in self._extract_declarations(text):
+        for a, b, c in self._extract_declarations(_strip_macro_declarations(text)):
             if a in ("struct", "class"):
                 self._declarations[b] = _parse_struct_block(
                     b,
