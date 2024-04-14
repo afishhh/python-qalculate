@@ -334,7 +334,9 @@ class Enum(Declaration):
     members: list[EnumVariant]
 
 
-def _parse_function_params(tokens: Sequence[Token]) -> list[Parameter | Literal["..."]] | None:
+def _parse_function_params(
+    tokens: Sequence[Token],
+) -> list[Parameter | Literal["..."]] | None:
     # C-style no-argument function declaration
     if tokens == [Token(type="ident", text="void")]:
         return []
@@ -409,10 +411,14 @@ def _parse_struct_block(
     current_comment = ""
     for token in it:
         if token.type == "comment":
-            if (comment_text := token.text.removeprefix("///")) is not token.text:
-                current_comment += comment_text.strip() + "\n"
-            elif (comment_text := token.text.removeprefix("/**")) is not token.text:
-                comment_text = comment_text.removesuffix("*/")
+            if token.text.startswith("///"):
+                current_comment += token.text.removeprefix("///").strip() + "\n"
+            elif token.text.startswith("/**"):
+                comment_text = token.text.removeprefix("/**").removesuffix("*/").strip()
+                comment_text = "\n".join(
+                    line.lstrip().removeprefix("*").strip()
+                    for line in comment_text.splitlines()
+                )
                 current_comment += comment_text.strip() + "\n"
         elif token.type == "whitespace":
             pass
@@ -470,7 +476,6 @@ def _parse_struct_block(
                         member_name += take_meaningful(rit).text
                     rest = list(rit)
 
-
             if (args_start := find(rest, lambda t: t.text == "(")) != -1:
                 last_paren = reverse_find(rest, lambda t: t.text == ")")
                 last_colon = reverse_find(rest, lambda t: t.text == ":")
@@ -506,7 +511,9 @@ def _parse_struct_block(
                     result.methods[method.name] = method
                     result.members.append(method)
                 else:
-                    print(f"warning: ignoring {name}.{member_name} because it takes a function pointer parameter")
+                    print(
+                        f"warning: ignoring {name}.{member_name} because it takes a function pointer parameter"
+                    )
                     current_comment = ""
             else:
                 field = Struct.Field(
