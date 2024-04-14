@@ -1,6 +1,9 @@
 { pkgs
-, buildPythonPackage
 
+, pkg-config
+, cmake
+, python3
+, python3Packages
 , libqalculate
 
 , ...
@@ -14,12 +17,12 @@ pkgs.stdenv.mkDerivation (self: {
 
   src = ./.;
 
-  nativeBuildInputs = with pkgs; [
+  nativeBuildInputs = [
     pkg-config
     cmake
     python3
 
-    (pkgs.python3Packages.buildPythonApplication {
+    (python3Packages.buildPythonApplication {
       pname = "pybind11-stubgen";
       version = "2.5.1";
       src = builtins.fetchTree {
@@ -37,7 +40,7 @@ pkgs.stdenv.mkDerivation (self: {
   buildInputs = [
     libqalculate
 
-    (pkgs.python3Packages.pybind11.overrideAttrs (old: {
+    (python3Packages.pybind11.overrideAttrs (old: {
       src = builtins.fetchTree {
         type = "github";
         owner = "pybind";
