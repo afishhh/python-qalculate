@@ -11,21 +11,21 @@
 
 #include "expression_items.hh"
 #include "generated.hh"
-#include "wrappers.hh"
 #include "proxies.hh"
 #include "pybind.hh"
 #include "ref.hh"
+#include "wrappers.hh"
 
 Number number_from_python_int(py::int_ value) {
   int overflow;
   long long long_value = PyLong_AsLongLongAndOverflow(value.ptr(), &overflow);
   if (overflow != 0) {
-    py::object positive;
+    py::int_ positive;
     if (overflow < 0) {
       PyObject *result = PyNumber_Absolute(value.ptr());
       if (result == nullptr)
         throw py::error_already_set();
-      positive = py::cast<py::object>(result);
+      positive = pybind11::reinterpret_steal<py::int_>(result);
     } else
       positive = value;
 
@@ -49,13 +49,24 @@ Number number_from_python_int(py::int_ value) {
 
 py::int_ number_to_python_int(Number const &number) {
   if (!number.isInteger())
-    throw py::value_error{};
+    throw py::value_error("Non-integer Number cannot be converted into an int");
 
-  std::string printed = number.printNumerator(36);
+  std::string printed = number.printNumerator(36, false);
   char *end = printed.end().base();
-  PyObject *result{PyLong_FromString(printed.c_str(), &end, 36)};
-  assert(result != nullptr && end == printed.end().base());
-  return py::reinterpret_steal<py::int_>(result);
+
+  PyObject *pyresult = PyLong_FromString(printed.c_str(), &end, 36);
+  assert(pyresult != nullptr);
+  assert(end == printed.end().base());
+
+  py::int_ result = py::reinterpret_steal<py::int_>(pyresult);
+
+  if (number.isNegative()) {
+    pyresult = PyNumber_Negative(result.ptr());
+    assert(pyresult != nullptr);
+    result = py::reinterpret_steal<py::int_>(pyresult);
+  }
+
+  return result;
 }
 
 MathStructureRef calculate(MathStructure const &mstruct,
