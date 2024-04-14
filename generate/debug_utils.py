@@ -18,6 +18,10 @@ def pprint_structure(structure: Struct):
 
     print(" {")
     for member in structure.members:
+        if member.docstring:
+            for line in member.docstring.splitlines():
+                print(f"  /// {line}")
+
         if isinstance(member, Struct.Field):
             print(f"  [field]  ", end="")
         else:
