@@ -47,24 +47,53 @@ Number number_from_python_int(py::int_ value) {
     return long_value;
 }
 
+py::int_ assert_and_steal_int(PyObject *object) {
+  assert(object != nullptr);
+  return py::reinterpret_steal<py::int_>(object);
+}
+
 py::int_ number_to_python_int(Number const &number) {
   if (!number.isInteger())
     throw py::value_error("Non-integer Number cannot be converted into an int");
 
-  std::string printed = number.printNumerator(36, false);
-  char *end = printed.end().base();
-
-  PyObject *pyresult = PyLong_FromString(printed.c_str(), &end, 36);
-  assert(pyresult != nullptr);
-  assert(end == printed.end().base());
-
-  py::int_ result = py::reinterpret_steal<py::int_>(pyresult);
-
-  if (number.isNegative()) {
-    pyresult = PyNumber_Negative(result.ptr());
-    assert(pyresult != nullptr);
-    result = py::reinterpret_steal<py::int_>(pyresult);
+  {
+    bool overflowed = false;
+    long value = number.lintValue(&overflowed);
+    if (!overflowed)
+      return assert_and_steal_int(PyLong_FromLong(value));
   }
+
+  constexpr long int bits = std::numeric_limits<long int>::digits - 1;
+  constexpr long int mask = ((long int)1 << bits) - 1;
+  std::vector<long int> limbs;
+
+  Number current = number;
+  if (current.isNegative())
+    assert(current.negate());
+
+  while (current.isNonZero()) {
+    Number tmp = current;
+    assert(tmp.bitAnd(mask));
+    limbs.push_back(tmp.ulintValue());
+    assert(current.shiftRight(bits));
+  }
+
+  py::int_ pybits = assert_and_steal_int(PyLong_FromLong(bits));
+  py::int_ pymask = assert_and_steal_int(PyLong_FromLong(mask));
+  py::int_ result = assert_and_steal_int(PyLong_FromLong(limbs.back()));
+  limbs.pop_back();
+
+  while (!limbs.empty()) {
+    result = assert_and_steal_int(
+        PyNumber_InPlaceLshift(result.ptr(), pybits.ptr()));
+    py::int_ limb = assert_and_steal_int(PyLong_FromLong(limbs.back()));
+    result =
+        assert_and_steal_int(PyNumber_InPlaceAdd(result.ptr(), limb.ptr()));
+    limbs.pop_back();
+  }
+
+  if (number.isNegative())
+    result = assert_and_steal_int(PyNumber_Negative(result.ptr()));
 
   return result;
 }
