@@ -6,24 +6,12 @@ import sys
 
 from .parsing import Accessibility, ParsedSourceFiles, SimpleType, Struct
 from .utils import *
-# from .debug_utils import pprint_structure
 
 libqalculate_src = Path(sys.argv[1]) / "libqalculate"
 output_directory = Path(sys.argv[2])
 qalculate_sources = ParsedSourceFiles(libqalculate_src.glob("*.h"))
 
 MATH_STRUCTURE_CLASS = "qalc_class_<MathStructure>"
-
-# pprint_structure(qalculate_sources.structure("ExpressionName"))
-# pprint_structure(qalculate_sources.structure("MathStructure"))
-# pprint_structure(qalculate_sources.structure("PrintOptions"))
-
-
-def clean(text: str) -> str:
-    text = re.sub("/\\*[^*].*?\\*/", "", text, flags=re.MULTILINE | re.DOTALL)
-    text = re.sub("[^/]// .*$", "", text, flags=re.MULTILINE)
-    text = "\n".join(line for line in text.splitlines() if line.strip())
-    return text
 
 
 header = IndentedWriter((output_directory / "generated.hh").open("w+"))
@@ -185,6 +173,7 @@ def options(
 
 enums: list[str] = []
 
+
 def enum(name: str, prefix: str | None = None):
     enums.append(name)
     enum = qalculate_sources.enum(name)
@@ -209,7 +198,6 @@ def enum(name: str, prefix: str | None = None):
                     f'.value("{variant.name.removeprefix(prefix)}", {name}::{variant.name}{doc_arg})\n'
                 )
         impl.write(";\n")
-
 
 
 enum("ApproximationMode", "APPROXIMATION_")
