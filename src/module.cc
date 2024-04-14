@@ -164,7 +164,7 @@ PYBIND11_MODULE(qalculate, m) {
               py::arg("options") = default_print_options, py::pos_only{},
               py::is_operator{})
 
-          .def("to_int",
+          .def("__int__",
                [](Number const &self) -> py::int_ {
                  return number_to_python_int(self);
                })

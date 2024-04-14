@@ -8,13 +8,13 @@ set_precision(100)
 def test_small_conversion():
     for _ in range(1000):
         value = randint(-(2**60), 2**60)
-        assert Number(value).to_int() == value
+        assert int(Number(value)) == value
 
 
 def test_big_conversion():
     for _ in range(1000):
         value = randint(-(2**100), 2**100)
-        assert Number(value).to_int() == value
+        assert int(Number(value)) == value
 
 
 @pytest.mark.parametrize(
@@ -46,5 +46,5 @@ def test_operation(
 
         result = num_op(qa, qb)
         if isinstance(result, Number):
-            result = result.to_int()
+            result = int(result)
         assert result == int_op(a, b)
