@@ -56,7 +56,7 @@ def tokenize(text: str) -> Iterable[Token]:
             text = text[end:]
         elif text.startswith("/*"):
             end = text.find("*/")
-            yield Token("comment", text[2 : end - 1])
+            yield Token("comment", text[: end + 2])
             text = text[end + 2 :]
         elif text.startswith("#"):
             text = text[text.find("\n") :]
