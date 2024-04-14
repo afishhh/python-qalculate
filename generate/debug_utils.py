@@ -2,7 +2,21 @@ from generate.parsing import Struct
 
 
 def pprint_structure(structure: Struct):
-    print(f"{structure.name} {{")
+    print(structure.name, end=" ")
+
+    if structure.bases:
+        print(":", end="")
+    for base in structure.bases:
+        if base is not structure.bases[0]:
+            print(", ", end="")
+        else:
+            print(" ", end="")
+        print(base.accessibility.value, end=" ")
+        if base.virtual:
+            print("virtual ", end="")
+        print(base.name, end="")
+
+    print(" {")
     for member in structure.members:
         if isinstance(member, Struct.Field):
             print(f"  [field]  ", end="")

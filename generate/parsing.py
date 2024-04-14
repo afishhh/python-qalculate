@@ -231,6 +231,17 @@ class Accessibility(enum.Enum):
     PROTECTED = "protected"
     PUBLIC = "public"
 
+    @staticmethod
+    def parse(string: str) -> "Accessibility":
+        try:
+            return {
+                "public": Accessibility.PUBLIC,
+                "protected": Accessibility.PROTECTED,
+                "private": Accessibility.PRIVATE,
+            }[string]
+        except KeyError:
+            raise ValueError(f"{string} is not a valid accessibility level")
+
 
 @dataclass(frozen=True, slots=True)
 class Parameter:
@@ -272,7 +283,14 @@ class Struct(Declaration):
         def is_destructor(self) -> bool:
             return self.name == "<destructor>"
 
+    @dataclass(frozen=True, slots=True)
+    class Base:
+        accessibility: Accessibility
+        virtual: bool
+        name: str
+
     block: str
+    bases: list[Base]
     fields: dict[str, Field]
     methods: dict[str, Method]
     # Preserves declaration order
@@ -293,13 +311,8 @@ class Enum(Declaration):
     members: list[EnumVariant]
 
 
-def _parse_struct_block(name: str, block: str, initial_accessibility: Accessibility):
-    ACCESSIBILITIES = {
-        "public": Accessibility.PUBLIC,
-        "protected": Accessibility.PROTECTED,
-        "private": Accessibility.PRIVATE,
-    }
-    result = Struct(name=name, block=block, fields={}, methods={}, members=[])
+def _parse_struct_block(name: str, block: str, initial_accessibility: Accessibility, bases: list[Struct.Base]):
+    result = Struct(name=name, block=block, bases=bases, fields={}, methods={}, members=[])
 
     code = block.strip().removeprefix("{").removesuffix("}")
     tokens = tokenize(code)
@@ -317,10 +330,12 @@ def _parse_struct_block(name: str, block: str, initial_accessibility: Accessibil
         elif token.type == "whitespace":
             pass
         else:
-            if token.text in ACCESSIBILITIES:
-                access = ACCESSIBILITIES[token.text]
+            try:
+                access = Accessibility.parse(token.text)
                 assert next(it).text == ":"
                 continue
+            except ValueError:
+                pass
 
             line = [token]
             while (token := next(it)).text not in (";", "{"):
@@ -512,15 +527,40 @@ def _strip_macro_declarations(text: str) -> str:
 
 
 class ParsedSourceFile(ParsedSource):
-    def _extract_declarations(self, text: str) -> Iterable[tuple[str, str, str]]:
+    def _extract_declarations(
+        self, text: str
+    ) -> Iterable[tuple[str, str, str, list[Struct.Base]]]:
         pattern = re.compile(
-            r"(struct|enum|class)\s+([a-zA-Z_0-9]+)\s*(:\s*((public|virtual|private)\s+)?[a-zA-Z_0-9]+(\s*,\s*((public|virtual|private)\s+)?[a-zA-Z_0-9]+)*)?\s*{"
+            r"(struct|enum|class)\s+([a-zA-Z_0-9]+)\s*(?::\s*((?:(public|protected|private|virtual)\s+)*([a-zA-Z_0-9]+)(?:\s*,\s*(?:(public|protected|private|virtual)\s+)*([a-zA-Z_0-9]+))*))?\s*{",
+            re.MULTILINE,
         )
         for match in pattern.finditer(text):
-            keyword, name = match.groups()[:2]
+            keyword, name, bases, *_ = match.groups()
             block_end = find_end_of_block(text, match.end() - 1)
             assert block_end != -1
-            yield (keyword, name, text[match.end() : block_end + 1].strip())
+
+            parsed_bases = []
+            for base in (bases or "").split(","):
+                access = Accessibility.PRIVATE
+                virtual = False
+                for token in base.split():
+                    try:
+                        access = Accessibility.parse(token)
+                    except ValueError:
+                        if token == "virtual":
+                            virtual = True
+                        else:
+                            parsed_bases.append(Struct.Base(access, virtual, token))
+                            break
+                else:
+                    break
+
+            yield (
+                keyword,
+                name,
+                text[match.end() : block_end + 1].strip(),
+                parsed_bases,
+            )
 
         pattern = re.compile("typedef\\s+(struct|enum|class)\\s+", re.MULTILINE)
         for match in pattern.finditer(text):
@@ -528,7 +568,7 @@ class ParsedSourceFile(ParsedSource):
             end = find_end_of_block(text, match.end())
             assert end != -1
             name = text[end:].split(maxsplit=2)[1].removesuffix(";")
-            yield (keyword, name, text[match.end() : end + 1].strip())
+            yield (keyword, name, text[match.end() : end + 1].strip(), [])
 
     def __init__(self, text: Path | str, filename: str | None = None) -> None:
         if isinstance(text, Path):
@@ -539,15 +579,18 @@ class ParsedSourceFile(ParsedSource):
         self._text = text
         self._declarations: dict[str, Declaration] = {}
 
-        for a, b, c in self._extract_declarations(_strip_macro_declarations(text)):
-            if a in ("struct", "class"):
-                self._declarations[b] = _parse_struct_block(
-                    b,
-                    c,
-                    Accessibility.PRIVATE if a == "class" else Accessibility.PUBLIC,
+        for kw, name, block, bases in self._extract_declarations(
+            _strip_macro_declarations(text)
+        ):
+            if kw in ("struct", "class"):
+                self._declarations[name] = _parse_struct_block(
+                    name,
+                    block,
+                    Accessibility.PRIVATE if kw == "class" else Accessibility.PUBLIC,
+                    bases,
                 )
-            elif a == "enum":
-                self._declarations[b] = _parse_enum_block(b, c)
+            elif kw == "enum":
+                self._declarations[name] = _parse_enum_block(name, block)
             else:
                 assert False
 
