@@ -4,7 +4,7 @@ import re
 from contextlib import contextmanager
 import sys
 
-from .parsing import Accessibility, ParsedSourceFiles, SimpleType, Struct
+from .parsing import Accessibility, Enum, ParsedSourceFiles, SimpleType, Struct
 from .utils import *
 # from .debug_utils import pprint_structure
 
@@ -54,12 +54,11 @@ def function_declaration(signature: str):
 
 
 def process_simple_properties(
-    name: str, text: str, renames: dict[str, str | None] = {}, qalc_class: bool = False
+    name: str,
+    struct: Struct,
+    renames: dict[str, str | None] = {},
+    qalc_class: bool = False,
 ):
-    PROPERTY_REGEX = re.compile(
-        "(virtual\\s+)?(const\\s+)?([a-zA-Z_::]+)[ &]+([a-zA-Z_]+)\\(\\) const;"
-    )
-
     class_type = (
         f"pybind11::class_<{name}>" if not qalc_class else f"qalc_class_<{name}>"
     )
@@ -68,13 +67,21 @@ def process_simple_properties(
         f"{class_type} &add_{pascal_to_snake(name)}_properties({class_type} &class_)"
     ):
         with impl.indent("return class_\n"):
-            for line in text.splitlines()[1:-1]:
-                if match := PROPERTY_REGEX.match(line.strip()):
-                    _, _, _, prop = match.groups()
-                    mapped = renames.get(prop, camel_to_snake(prop))
-                    if mapped is None:
-                        continue
-                    impl.write(f'.def_property_readonly("{mapped}", &{name}::{prop})\n')
+            for member in struct.methods.values():
+                if (
+                    member.params != []
+                    or not member.const
+                    or member.is_operator
+                ):
+                    continue
+
+                mapped = renames.get(member.name, camel_to_snake(member.name))
+                if mapped is None:
+                    continue
+
+                impl.write(
+                    f'.def_property_readonly("{mapped}", &{name}::{member.name})\n'
+                )
         impl.write(";\n")
 
 
@@ -145,33 +152,24 @@ def process_options_declaration(
         impl.write(";\n")
 
 
-def process_enum_declaration(name: str, text: str, prefix: str):
-    declarations = text.splitlines()[1:-1]
-
+def process_enum_declaration(name: str, enum: Enum, prefix: str):
     with function_declaration(
         f"pybind11::enum_<{name}> add_{pascal_to_snake(name)}_enum(pybind11::module_ &m)"
     ):
         with impl.indent(f'return pybind11::enum_<{name}>(m, "{name}")\n'):
-            doc_comment = None
-            for line in declarations:
-                line = line.strip()
-                if line.startswith("//"):
-                    if doc_comment is None:
-                        doc_comment = ""
-                    else:
-                        doc_comment += "\n"
-                    doc_comment += line.removeprefix("///").strip()
-                else:
-                    value = line.removesuffix(",")
-                    doc_arg = (
-                        (', "' + doc_comment.replace('"', '\\"') + '"')
-                        if doc_comment is not None
-                        else ""
+            for variant in enum.members:
+                doc_arg = (
+                    (
+                        ', "'
+                        + variant.docstring.replace('"', '\\"').replace("\n", "\\n")
+                        + '"'
                     )
-                    impl.write(
-                        f'.value("{value.removeprefix(prefix)}", {name}::{value}{doc_arg})\n'
-                    )
-                    doc_comment = None
+                    if variant.docstring
+                    else ""
+                )
+                impl.write(
+                    f'.value("{variant.name.removeprefix(prefix)}", {name}::{variant.name}{doc_arg})\n'
+                )
         impl.write(";\n")
 
 
@@ -183,7 +181,7 @@ def enum(name: str, prefix: str | None = None):
     if prefix is None:
         prefix = f"{pascal_to_snake(name).upper()}_"
     declaration = qalculate_sources.enum(name)
-    return process_enum_declaration(name, declaration.block, prefix)
+    return process_enum_declaration(name, declaration, prefix)
 
 
 def options(name: str, exclude: set[str] = set(), **kwargs):
@@ -249,12 +247,13 @@ def properties_for(
     name: str, renames: dict[str, str | None] = {}, qalc_class: bool = False
 ):
     declaration = qalculate_sources.structure(name)
-    process_simple_properties(name, declaration.block, renames, qalc_class)
+    process_simple_properties(name, declaration, renames, qalc_class)
 
 
 properties_for(
     "Number",
     {
+        "llintValue": None,
         "floatValue": None,
         "integer": None,
         "getBoolean": None,
@@ -282,6 +281,8 @@ properties_for(
         **{
             f: None
             for f in (
+                "prefix",
+                "unit_exp_prefix",
                 "isDateTime",
                 "find_x_var",
                 "isMatrix",
@@ -320,8 +321,6 @@ math_structure_overrides = {
     ),
     "timeval": (None, "static_cast<struct timeval*>(nullptr)"),
 }
-
-METHOD_REGEX = re.compile("([a-zA-Z_]+)\\s+([a-zA-Z_]+)\\((.*?)\\)\\s*(const)?;")
 
 with function_declaration(
     f"{MATH_STRUCTURE_CLASS} &add_math_structure_methods({MATH_STRUCTURE_CLASS} &class_)"

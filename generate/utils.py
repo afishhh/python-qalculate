@@ -153,8 +153,8 @@ def snake_to_camel(name: str):
 
 
 class PeekableIterator(Iterator[T]):
-    def __init__(self, inner: Iterator[T]) -> None:
-        self._inner = inner
+    def __init__(self, inner: Iterable[T]) -> None:
+        self._inner = iter(inner)
         self._queue: deque[T] = deque()
 
     def __iter__(self) -> Iterator[T]:

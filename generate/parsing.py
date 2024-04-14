@@ -260,6 +260,12 @@ class Struct(Declaration):
         const: bool
         virtual: bool
 
+        @property
+        def is_operator(self) -> bool:
+            return (
+                self.name.startswith("operator") and self.name[8] in string.punctuation
+            )
+
     block: str
     fields: dict[str, Field]
     methods: dict[str, Method]
@@ -277,6 +283,8 @@ class EnumVariant:
 class Enum(Declaration):
     block: str
     variants: dict[str, EnumVariant]
+    # Preserves declaration order
+    members: list[EnumVariant]
 
 
 def _parse_struct_block(name: str, block: str, initial_accessibility: Accessibility):
@@ -415,6 +423,44 @@ def _parse_struct_block(name: str, block: str, initial_accessibility: Accessibil
     return result
 
 
+def _parse_enum_block(name: str, block: str) -> Enum:
+    code = block.strip().removeprefix("{").removesuffix("}")
+    tokens = tokenize(code)
+
+    result = Enum(name=name, block=block, variants={}, members=[])
+
+    it = PeekableIterator(tokens)
+    current_comment = ""
+    for token in it:
+        if token.type == "comment":
+            if (comment_text := token.text.removeprefix("///")) is not token.text:
+                current_comment += comment_text.strip() + "\n"
+            elif (comment_text := token.text.removeprefix("/**")) is not token.text:
+                comment_text = comment_text.removesuffix("*/")
+                current_comment += comment_text.strip() + "\n"
+        elif token.type == "whitespace":
+            pass
+        else:
+            variant = EnumVariant(docstring=current_comment.strip(), name=token.text)
+            current_comment = ""
+
+            result.variants[variant.name] = variant
+            result.members.append(variant)
+
+            try:
+                skip_noncode(it)
+                token = next(it)
+                if token == Token("punct", "="):
+                    while (token := next(it)) != Token("punct", ","):
+                        pass
+                else:
+                    assert token == Token("punct", ",")
+            except StopIteration:
+                pass
+
+    return result
+
+
 class ParsedSource(ABC):
     @abstractmethod
     def declaration(self, name: str) -> Declaration:
@@ -469,7 +515,7 @@ class ParsedSourceFile(ParsedSource):
                     Accessibility.PRIVATE if a == "class" else Accessibility.PUBLIC,
                 )
             elif a == "enum":
-                self._declarations[b] = Enum(b, c, {})
+                self._declarations[b] = _parse_enum_block(b, c)
             else:
                 assert False
 
