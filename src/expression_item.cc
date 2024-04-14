@@ -68,6 +68,19 @@ make_function_pointer_pair(std::function<Ret(Args...)> const &function) {
       py::arg("can_display_unicode_string") =                                  \
           static_cast<std::function<bool(char const *)>>(nullptr))
 
+#define DEF_EXPRESSION_ITEM_GETTER(fun, type)                                  \
+  def_static(                                                                  \
+      "get",                                                                   \
+      [](std::string_view name) -> QalcRef<type> {                             \
+        /* TODO: How useful is the second argument? */                         \
+        auto ptr = (fun)(std::string(name));                                   \
+        if (!ptr)                                                              \
+          throw py::key_error(#type " with name " + std::string(name) +        \
+                              " does not exist");                              \
+        return QalcRef(ptr);                                                   \
+      },                                                                       \
+      py::arg("name"), py::pos_only{})
+
 qalc_class_<ExpressionItem> add_expression_item(py::module_ &m) {
   py::class_<ExpressionNamesProxy>(m, "_ExpressionNames")
       .def("__getitem__", &ExpressionNamesProxy::get, py::is_operator{})
@@ -80,17 +93,9 @@ qalc_class_<ExpressionItem> add_expression_item(py::module_ &m) {
                                           return ExpressionNamesProxy(
                                               std::move(item));
                                         }))
-      .def_static(
-          "get",
-          [](std::string_view name) -> QalcRef<ExpressionItem> {
-            // TODO: How useful is the second argument?
-            auto ptr = CALCULATOR->getExpressionItem(std::string(name));
-            if (!ptr)
-              throw py::key_error("ExpressionItem with name " +
-                                  std::string(name) + " does not exist");
-            return QalcRef(ptr);
-          },
-          py::arg("name"), py::pos_only{})
+
+      .DEF_EXPRESSION_ITEM_GETTER(CALCULATOR->getExpressionItem, ExpressionItem)
+
       // NOTE: While this function does accept extra arguments in libqalculate
       //       I think it can be replaced by the "findName" function instead.
       //       Therefore this can just be a property while findName can be used
@@ -145,16 +150,7 @@ qalc_class_<MathFunction> add_math_function(py::module_ &m) {
              return QalcRef<MathFunction>(mstruct.function());
            }),
            py::arg("math_structure"), py::pos_only{})
-      .def_static(
-          "get",
-          [](std::string_view name) -> QalcRef<MathFunction> {
-            auto ptr = CALCULATOR->getFunction(std::string(name));
-            if (!ptr)
-              throw py::key_error("MathFunction with name " +
-                                  std::string(name) + " does not exist");
-            return QalcRef(ptr);
-          },
-          py::arg("name"), py::pos_only{})
+      .DEF_EXPRESSION_ITEM_GETTER(CALCULATOR->getFunction, MathFunction)
       .def(
           "calculate",
           [](MathFunction &self, py::args args,
@@ -189,4 +185,22 @@ py::class_<PAssumptions> &add_assumptions(py::module_ &m) {
                }),
                py::arg("type") = ASSUMPTION_TYPE_NUMBER,
                py::arg("sign") = ASSUMPTION_SIGN_UNKNOWN));
+}
+
+qalc_class_<Variable> add_variable(py::module_ &m) {
+  return qalc_class_<Variable, ExpressionItem>(m, "Variable")
+      .DEF_EXPRESSION_ITEM_GETTER(CALCULATOR->getVariable, Variable)
+      .def_property_readonly("is_known", &Variable::isKnown);
+}
+
+qalc_class_<UnknownVariable> add_unknown_variable(py::module_ &m) {
+  return qalc_class_<UnknownVariable, Variable>(m, "UnknownVariable")
+      .def_property(
+          "assumptions", &UnknownVariable::assumptions,
+          [](UnknownVariable &self, Assumptions const &assumptions) {
+            self.setAssumptions(new Assumptions(assumptions));
+          },
+          py::return_value_policy::copy)
+      .def_property("interval", &UnknownVariable::interval,
+                    &UnknownVariable::setInterval);
 }
