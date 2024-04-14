@@ -136,15 +136,15 @@ public:
 template <size_t MIN_ITEMS, typename Self>
 class MathStructureGenericOperationProxy : public MathStructureSequence {
 public:
-  MathStructureGenericOperationProxy(py::typing::List<MathStructure> list) {
+  MathStructureGenericOperationProxy(py::args args) {
     PROXY_INIT;
 
-    if (list.size() < MIN_ITEMS)
+    if (args.size() < MIN_ITEMS)
       throw py::value_error("At least " + std::to_string(MIN_ITEMS) +
                             " are requried for this node");
 
     m_type = Self::TYPE;
-    for (auto value : list) {
+    for (auto value : args) {
       auto structure = value.cast<MathStructureRef>();
       PROXY_APPEND_CHILD(structure);
     }
@@ -155,8 +155,7 @@ public:
 protected:
   template <typename T>
   static void init(qalc_class_<T, MathStructureSequence> &c) {
-    c.def(py::init<py::typing::List<MathStructure>>(),
-          py::arg("children") = py::list());
+    c.def(py::init<py::args>());
   }
 
 public:
