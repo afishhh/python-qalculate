@@ -247,7 +247,29 @@ public:
 };
 
 STUB_PROXY(Datetime);
-STUB_PROXY(Variable);
+
+class MathStructureVariableProxy final : public MathStructure {
+public:
+  using Base = MathStructure;
+
+  static void init(qalc_class_<MathStructureVariableProxy, Base> &class_) {
+    class_.def(py::init([](QalcRef<Variable> const &variable) {
+      auto result = QalcRef<MathStructureVariableProxy>::construct();
+      result->setType(STRUCT_VARIABLE);
+      result->setVariable(variable);
+      return result;
+    }));
+    class_.def_property("variable", &MathStructure::variable,
+                        &MathStructure::setVariable);
+  }
+
+  void repr(std ::string &output) const {
+    output += "MathStructure.Variable(variable=";
+    output +=
+        py::cast(this->variable()).attr("__repr__")().cast<std::string_view>();
+    output += ")";
+  }
+};
 
 class MathStructureFunctionProxy : public MathStructure {
 public:

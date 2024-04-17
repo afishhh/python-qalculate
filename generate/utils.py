@@ -153,6 +153,9 @@ def snake_to_camel(name: str):
     name = name[0].lower() + name[1:]
     return name
 
+def cpp_string(text: str):
+    return "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
+
 
 class PeekableIterator(Iterator[T]):
     def __init__(self, inner: Iterable[T]) -> None:

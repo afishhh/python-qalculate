@@ -1,9 +1,13 @@
+from typing import Callable
 import pytest
 from qalculate import (
     ApproximationMode,
+    ComparisonType,
     EvaluationOptions,
     MathStructure as S,
     MathFunction as MF,
+    Variable,
+    UnknownVariable,
     parse,
 )
 
@@ -27,9 +31,28 @@ from qalculate import (
             "23 / 12",
             S.Multiplication(S.Number(23), S.Power(S.Number(12), S.Number(-1))),
         ),
+        # FIXME: Whatever pytest does between evaluating this and calling the test function breaks comparison of Variables!
+        #       This is because new variables seem to start pointing to different addresses
+        ("x", lambda: S.Variable(UnknownVariable.get("x"))),
+        (
+            "x² - x + 1 = 0",
+            lambda: S.Comparison(
+                S.Addition(
+                    S.Power(S.Variable(UnknownVariable.get("x")), S.Number(2)),
+                    S.Multiplication(
+                        S.Number(-1), S.Variable(UnknownVariable.get("x"))
+                    ),
+                    S.Number(1),
+                ),
+                ComparisonType.EQUALS,
+                S.Number(0),
+            ),
+        ),
     ],
 )
-def test_simple_parsing(string: str, expected: S):
+def test_simple_parsing(string: str, expected: S | Callable[[], S]):
+    if not isinstance(expected, S):
+        expected = expected()
     assert parse(string) == expected
 
 

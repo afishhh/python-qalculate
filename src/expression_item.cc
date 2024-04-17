@@ -204,3 +204,22 @@ qalc_class_<UnknownVariable> add_unknown_variable(py::module_ &m) {
       .def_property("interval", &UnknownVariable::interval,
                     &UnknownVariable::setInterval);
 }
+
+qalc_class_<Unit> add_unit(py::module_ &m) {
+  return add_unit_properties(
+      qalc_class_<Unit, ExpressionItem>(m, "Unit")
+          .def_property_readonly(
+              "is_si", [](Unit const &self) { return self.isSIUnit(); })
+          .def_property(
+              "system", [](Unit const &self) { return self.system(); },
+              [](Unit &self, std::string_view system) {
+                // The docsting for setSystem says that setting to "SI"
+                // case-insensitively is equivalent to setAsSIUnit().
+                // But the implementation is missing a check for this single
+                // case...
+                if (system == "sI")
+                  self.setAsSIUnit();
+                else
+                  self.setSystem(std::string(system));
+              }));
+}

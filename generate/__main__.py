@@ -66,6 +66,7 @@ def properties_for(
     allow_readwrite: bool = False,
     require_getter_const: bool = True,
     renames: dict[str, str | None] = {},
+    extra_for_repr: Iterable[str] = [],
     pybind_class: str | None = None,
     add_repr_from_rw: bool = False,
 ):
@@ -76,7 +77,7 @@ def properties_for(
         f"{class_type} &add_{pascal_to_snake(name)}_properties({class_type} &class_)"
     ):
         with impl.indent("return class_\n"):
-            added_rw_props = []
+            added_rw_props = list(extra_for_repr)
 
             for member in iter_properties(
                 struct, require_getter_const=require_getter_const
@@ -86,15 +87,16 @@ def properties_for(
                     continue
 
                 setter = struct.methods.get(f"set{camel_to_pascal(member.name)}", None)
+                docarg = f', {cpp_string(member.docstring)}' if member.docstring else ""
                 if setter and len(setter.params) == 1 and allow_readwrite:
                     impl.write(
-                        f'.def_property("{mapped}", &{name}::{member.name}, &{name}::{setter.name})\n'
+                        f'.def_property("{mapped}", &{name}::{member.name}, &{name}::{setter.name}{docarg})\n'
                     )
 
                     added_rw_props.append(mapped)
                 else:
                     impl.write(
-                        f'.def_property_readonly("{mapped}", &{name}::{member.name})\n'
+                        f'.def_property_readonly("{mapped}", &{name}::{member.name}{docarg})\n'
                     )
 
             if add_repr_from_rw:
@@ -191,17 +193,11 @@ def enum(name: str, prefix: str | None = None):
     ):
         with impl.indent(f'return pybind11::enum_<{name}>(m, "{name}")\n'):
             for variant in enum.members:
-                doc_arg = (
-                    (
-                        ', "'
-                        + variant.docstring.replace('"', '\\"').replace("\n", "\\n")
-                        + '"'
-                    )
-                    if variant.docstring
-                    else ""
+                docarg = (
+                    f", {cpp_string(variant.docstring)}" if variant.docstring else ""
                 )
                 impl.write(
-                    f'.value("{variant.name.removeprefix(prefix)}", {name}::{variant.name}{doc_arg})\n'
+                    f'.value("{variant.name.removeprefix(prefix)}", {name}::{variant.name}{docarg})\n'
                 )
         impl.write(";\n")
 
@@ -287,6 +283,8 @@ properties_for(
     renames={
         # Remove type-specific checks (use isinstance instead)
         **{f"is{snake_to_pascal(name)}": None for name in structure_types},
+        # Type-specific getters
+        **{f"{snake_to_camel(name)}": None for name in structure_types},
         **{
             f: None
             for f in (
@@ -530,6 +528,24 @@ properties_for(
     require_getter_const=False,
     pybind_class="pybind11::class_<class PAssumptions>",
     add_repr_from_rw=True,
+)
+
+properties_for(
+    "Unit",
+    allow_readwrite=True,
+    add_repr_from_rw=True,
+    pybind_class="qalc_class_<Unit, ExpressionItem>",
+    renames={
+        "copy": None,
+        "type": None,
+        "subtype": None,
+        "isSIUnit": None,
+        "system": None,
+        # TODO: What do these do??
+        "convertToBaseUnit": None,
+        "convertFromBaseUnit": None,
+    },
+    extra_for_repr=["is_si", "system"],
 )
 
 header.close()

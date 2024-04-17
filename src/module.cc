@@ -233,12 +233,19 @@ PYBIND11_MODULE(qalculate, m) {
 
   add_expression_name(m);
   add_expression_item(m);
+  add_assumptions(m);
+  add_variable(m).def(py::init([](MathStructureVariableProxy const &m) {
+                        return QalcRef(m.variable());
+                      }),
+                      py::arg("math_structure"), py::pos_only{},
+                      py::return_value_policy::reference_internal);
+  add_unknown_variable(m);
   add_math_function(m);
   add_builtin_functions(m);
-  add_assumptions(m);
-  add_variable(m);
-  add_unknown_variable(m);
+  add_unit(m);
 
+  py::implicitly_convertible<Variable, MathStructureVariableProxy>();
+  py::implicitly_convertible<MathStructureVariableProxy, Variable>();
   py::implicitly_convertible<MathFunction, MathStructureFunctionProxy>();
 
   m.def("get_message_print_options",
