@@ -1,6 +1,7 @@
 #pragma once
 
 #include <libqalculate/MathStructure.h>
+#include <libqalculate/Variable.h>
 #include <pybind11/pybind11.h>
 
 template <typename T, class = void> struct QalcStructureInfo {};
@@ -24,12 +25,20 @@ template <typename T> class QalcRef {
 
   // for debugging
   inline void _ref_notify(int new_refs) {
+#ifdef PYQALCULATE_DEBUG_REFS
     if (_ptr) {
-      // std::cerr << "QalcPtr<" << typeid(T).name() << "> " << (void *)_ptr
-      //           << "'s refs: " << new_refs;
-      // std::cerr << '\n';
+      if constexpr (std::is_base_of_v<ExpressionItem, T>) {
+        std::cerr << "QalcPtr<" << typeid(T).name() << "["
+                  << "\"" << _ptr->name() << "\"]"
+                  << "> ";
+      } else {
+        std::cerr << "QalcPtr<" << typeid(T).name() << "> ";
+      }
+      std::cerr << (void *)_ptr << "'s refs: " << new_refs;
+      std::cerr << '\n';
       (void)new_refs;
     }
+#endif // PYQALCULATE_DEBUG_REFS
   }
 
 public:
