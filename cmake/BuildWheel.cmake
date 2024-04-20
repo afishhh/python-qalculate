@@ -52,6 +52,7 @@ function(build_binary_wheel)
 			COMMAND
 				"${CMAKE_COMMAND}" -E copy "${SOURCE}" "${DEST}"
 			DEPENDS "${SOURCE}"
+			COMMENT ""
 			VERBATIM
 		)
 	endmacro()
@@ -67,6 +68,7 @@ function(build_binary_wheel)
 			"${ARG_STUBS}"
 			"${DATA_DIR}/__init__.pyi"
 		)
+		list(APPEND EXTRA_DEPS "${ARG_STUBS}")
 	endif()
 
 	file(MAKE_DIRECTORY "${DISTINFO_DIR}")
@@ -97,12 +99,13 @@ function(build_binary_wheel)
 	add_custom_command(
 		OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${WHEEL_FILESTEM}.whl"
 		COMMAND
-		COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/cmake/write_wheel_record.py" "${UNPACKED_WHEEL_DIR}"
+			python3 "${CMAKE_CURRENT_SOURCE_DIR}/cmake/write_wheel_record.py" "${UNPACKED_WHEEL_DIR}"
 		COMMAND
 			"${CMAKE_COMMAND}" -E tar
 			c "../${WHEEL_FILESTEM}.whl" --format=zip .
 		WORKING_DIRECTORY "${UNPACKED_WHEEL_DIR}"
 		DEPENDS ${EXTRA_DEPS}
+		COMMENT "Building ${WHEEL_FILESTEM}.whl"
 		VERBATIM
 	)
 

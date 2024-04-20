@@ -102,13 +102,18 @@ set_target_properties(
 )
 
 add_custom_command(
-	TARGET python-qalculate
-	POST_BUILD
+	OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/qalculate.pyi"
 	COMMAND
 		"${CMAKE_COMMAND}" -E env "PYTHONPATH=${CMAKE_CURRENT_BINARY_DIR}:$ENV{PYTHONPATH}"
 		pybind11-stubgen -o "${CMAKE_CURRENT_BINARY_DIR}" qalculate --enum-class-locations ".*:qalculate"
-	BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/qalculate.pyi"
+	DEPENDS python-qalculate
+	COMMENT "Generating qalculate.pyi with pybind11-stubgen"
 	VERBATIM
+)
+
+add_custom_target(
+	"python-qalculate-stubs" ALL
+	DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/qalculate.pyi"
 )
 
 build_binary_wheel(
