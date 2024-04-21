@@ -416,7 +416,6 @@ math_structure_operators = [
     ("-=", "__isub__"),
     ("^", "__xor__"),
     ("^=", "__ixor__"),
-    ("==", "__eq__"),
 ]
 
 with function_declaration(

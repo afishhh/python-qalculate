@@ -198,8 +198,14 @@ PYBIND11_MODULE(qalculate, m) {
               [](Number &self, Number const &other) { self ^= other; },
               py::is_operator{})
 
-          .def(py::self == py::self)
-          .def(py::self != py::self)
+          .def(
+              "__eq__",
+              [](Number const&self, Number const &other) {
+                // Compare infinities as equal by default
+                return self.equals(other, false, true);
+              },
+              py::is_operator{})
+
           .def(py::self < py::self)
           .def(py::self <= py::self)
           .def(py::self > py::self)
@@ -226,6 +232,14 @@ PYBIND11_MODULE(qalculate, m) {
                            return s.print(options);
                          },
                          py::arg("options") = &global_print_options)
+
+                     .def(
+                         "__eq__",
+                         [](MathStructure const&self, MathStructure const &other) {
+                           // Compare infinities as equal by default
+                           return self.equals(other, false, true);
+                         },
+                         py::is_operator{}))))));
 
   number.def(py::init([](MathStructureNumberProxy const &structure) {
     return structure.number();
