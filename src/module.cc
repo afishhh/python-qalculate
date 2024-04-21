@@ -11,6 +11,7 @@
 
 #include "expression_items.hh"
 #include "generated.hh"
+#include "options.hh"
 #include "proxies.hh"
 #include "pybind.hh"
 #include "ref.hh"
@@ -161,7 +162,7 @@ PYBIND11_MODULE(qalculate, m) {
               [](Number const &self, PrintOptions const &options) {
                 return self.print(options);
               },
-              py::arg("options") = default_print_options, py::pos_only{},
+              py::arg("options") = &global_print_options, py::pos_only{},
               py::is_operator{})
 
           .def("__int__",
@@ -216,8 +217,7 @@ PYBIND11_MODULE(qalculate, m) {
                           &MathStructure::compareApproximately)
 
                      .def("calculate", &calculate,
-                          py::arg("options") =
-                              PEvaluationOptions(default_evaluation_options),
+                          py::arg("options") = &global_evaluation_options,
                           py::arg("to") = "")
 
                      .def(
@@ -225,7 +225,7 @@ PYBIND11_MODULE(qalculate, m) {
                          [](MathStructure &s, PrintOptions const &options) {
                            return s.print(options);
                          },
-                         py::arg("options") = default_print_options))))));
+                         py::arg("options") = &global_print_options)
 
   number.def(py::init([](MathStructureNumberProxy const &structure) {
     return structure.number();
@@ -255,8 +255,7 @@ PYBIND11_MODULE(qalculate, m) {
         [](PrintOptions &opts) { CALCULATOR->setMessagePrintOptions(opts); });
 
   m.def("calculate", &calculate, py::arg("mstruct"), py::pos_only{},
-        py::arg("options") = PEvaluationOptions(default_evaluation_options),
-        py::arg("to") = "");
+        py::arg("options") = &global_evaluation_options, py::arg("to") = "");
 
   m.def(
       "parse",
@@ -272,8 +271,7 @@ PYBIND11_MODULE(qalculate, m) {
         return calculate(CALCULATOR->parse(expression, options.parse_options),
                          options, to);
       },
-      py::arg("mstruct"),
-      py::arg("options") = PEvaluationOptions(default_evaluation_options),
+      py::arg("mstruct"), py::arg("options") = &global_evaluation_options,
       py::arg("to") = "");
 
   m.def(
@@ -287,9 +285,8 @@ PYBIND11_MODULE(qalculate, m) {
         return result;
       },
       py::arg("expression"),
-      py::arg("eval_options") =
-          PEvaluationOptions(default_user_evaluation_options),
-      py::arg("print_options") = default_print_options);
+      py::arg("eval_options") = &global_evaluation_options,
+      py::arg("print_options") = &global_print_options);
 
   py::class_<CalculatorMessage>(m, "Message")
       .def_property_readonly("text", &CalculatorMessage::c_message)
@@ -320,4 +317,15 @@ PYBIND11_MODULE(qalculate, m) {
       if (!(*CALCULATOR.*loader.second)())
         throw std::runtime_error("qalculate failed to load something");
     });
+
+#define MAKE_GLOBAL_OPTION_FUNCTIONS(type, name)                               \
+  m.def("set_global_" #name "_options",                                        \
+        [](type const &options) { global_##name##_options = options; });       \
+  m.def("get_global_" #name "_options",                                        \
+        []() { return global_##name##_options; })
+
+  MAKE_GLOBAL_OPTION_FUNCTIONS(ParseOptions, parse);
+  MAKE_GLOBAL_OPTION_FUNCTIONS(PEvaluationOptions, evaluation);
+  MAKE_GLOBAL_OPTION_FUNCTIONS(PrintOptions, print);
+  MAKE_GLOBAL_OPTION_FUNCTIONS(SortOptions, sort);
 }

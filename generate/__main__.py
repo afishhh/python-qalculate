@@ -134,7 +134,7 @@ def options(
     if func_name is None:
         func_name = f"add_{pascal_to_snake(name)}"
 
-    defaults_name = f"default_{pascal_to_snake(name)}"
+    defaults_name = f"global_{pascal_to_snake(name)}"
 
     if define_new_default:
         defaults_name = f"_autogen_{pascal_to_snake(name)}_defaults"
@@ -239,6 +239,7 @@ with function_declaration("void add_all_enums(pybind11::module_ &m)"):
         impl.write(f"add_{pascal_to_snake(enm)}_enum(m);\n")
 
 impl.write('#include "wrappers.hh"\n')
+impl.write('#include "options.hh"\n')
 
 options("SortOptions")
 options(
@@ -324,7 +325,7 @@ math_structure_method_whitelist = {
 math_structure_overrides = {
     "EvaluationOptions": (
         "PEvaluationOptions",  # overriden type
-        "PEvaluationOptions(default_evaluation_options)",  # overriden default value
+        "PEvaluationOptions(global_evaluation_options)",  # overriden default value
     ),
     "timeval": (None, "static_cast<struct timeval*>(nullptr)"),
 }

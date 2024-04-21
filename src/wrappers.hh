@@ -15,6 +15,7 @@ public:
   PEvaluationOptions() : EvaluationOptions() {}
   PEvaluationOptions(EvaluationOptions const &options)
       : EvaluationOptions(options) {}
+
   PEvaluationOptions(PEvaluationOptions &&other)
       : EvaluationOptions(std::move(other)) {
     other.isolate_var = nullptr;
@@ -24,8 +25,18 @@ public:
     other.isolate_var = nullptr;
     return *this;
   };
-  PEvaluationOptions(PEvaluationOptions const &) = delete;
-  PEvaluationOptions &&operator=(PEvaluationOptions const &) = delete;
+
+  PEvaluationOptions(PEvaluationOptions const &other)
+      : EvaluationOptions(other) {
+    if (this->isolate_var)
+      const_cast<MathStructure *>(this->isolate_var)->ref();
+  }
+  PEvaluationOptions &operator=(PEvaluationOptions const &other) {
+    *(EvaluationOptions *)(this) = other;
+    if (this->isolate_var)
+      const_cast<MathStructure *>(this->isolate_var)->ref();
+    return *this;
+  }
 
   std::optional<MathStructureRef> get_isolate_var();
   void set_isolate_var(std::optional<MathStructureRef>);
