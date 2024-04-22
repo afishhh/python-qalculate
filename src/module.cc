@@ -147,15 +147,36 @@ PYBIND11_MODULE(qalculate, m) {
 
   repr_print_options.use_unicode_signs = UNICODE_SIGNS_WITHOUT_EXPONENTS;
 
-  auto number = add_number_properties(
+  auto number = add_number_operators(add_number_properties(
       py::class_<Number>(m, "Number")
           .def(py::init<>())
           .def(py::init(&number_from_python_int))
           .def(py::init([](long double value) {
             Number number;
-            number.setFloat(value);
+            if (value == INFINITY)
+              number.setPlusInfinity();
+            else if (value == -INFINITY)
+              number.setMinusInfinity();
+            else if (value == NAN)
+              throw py::value_error("NaN cannot be converted into Number");
+            else
+              number.setFloat(value);
             return number;
           }))
+
+          .def_property_readonly_static("PLUS_INFINITY",
+                                        [](py::handle) {
+                                          Number number;
+                                          number.setPlusInfinity();
+                                          return number;
+                                        })
+
+          .def_property_readonly_static("MINUS_INFINITY",
+                                        [](py::handle) {
+                                          Number number;
+                                          number.setMinusInfinity();
+                                          return number;
+                                        })
 
           .def(
               "print",
@@ -177,15 +198,6 @@ PYBIND11_MODULE(qalculate, m) {
 
           .def(-py::self)
 
-          .def(py::self * py::self)
-          .def(py::self *= py::self)
-          .def(py::self / py::self)
-          .def(decltype(py::self)() /= py::self)
-          .def(py::self + py::self)
-          .def(py::self += py::self)
-          .def(py::self - py::self)
-          .def(decltype(py::self)() -= py::self)
-
           // Number ^ Number is actually exponentiation not a bitwise xor!
           .def(
               "__pow__",
@@ -200,7 +212,7 @@ PYBIND11_MODULE(qalculate, m) {
 
           .def(
               "__eq__",
-              [](Number const&self, Number const &other) {
+              [](Number const &self, Number const &other) {
                 // Compare infinities as equal by default
                 return self.equals(other, false, true);
               },
@@ -209,8 +221,9 @@ PYBIND11_MODULE(qalculate, m) {
           .def(py::self < py::self)
           .def(py::self <= py::self)
           .def(py::self > py::self)
-          .def(py::self >= py::self));
+          .def(py::self >= py::self)));
 
+  py::implicitly_convertible<long double, Number>();
   py::implicitly_convertible<py::int_, Number>();
 
   // FIXME: Clean this up finally...
@@ -235,7 +248,8 @@ PYBIND11_MODULE(qalculate, m) {
 
                      .def(
                          "__eq__",
-                         [](MathStructure const&self, MathStructure const &other) {
+                         [](MathStructure const &self,
+                            MathStructure const &other) {
                            // Compare infinities as equal by default
                            return self.equals(other, false, true);
                          },

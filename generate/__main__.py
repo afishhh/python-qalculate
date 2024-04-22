@@ -273,6 +273,28 @@ properties_for(
     },
 )
 
+number_operators = [
+    ("multiply", "__mul__"),
+    ("divide", "__truediv__"),
+    ("add", "__add__"),
+    ("subtract", "__sub__"),
+    ("bitXor", "__xor__"),
+]
+
+with function_declaration(
+    f"py::class_<Number> &add_number_operators(py::class_<Number> &class_)"
+):
+    with impl.indent("return class_\n"):
+        for qalc_function, operator in number_operators:
+            with impl.indent(f'.def("{operator}", [](Number const &self, Number const &other) {{\n'):
+                impl.write(f"Number result = self;\n")
+                with impl.indent(f"if(!result.{qalc_function}(other))\n"):
+                    impl.write(f'throw py::value_error("Operation failed");\n')
+                impl.write("return result;\n")
+            impl.write("}, py::is_operator{})\n");
+        impl.write(";\n");
+
+
 struct = qalculate_sources.enum("StructureType")
 structure_types = []
 for variant in struct.members:

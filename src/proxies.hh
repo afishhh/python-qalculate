@@ -209,7 +209,7 @@ GENERIC_OPERATION_PROXY(LogicalOr, STRUCT_LOGICAL_OR, 0);
 GENERIC_OPERATION_PROXY(LogicalXor, STRUCT_LOGICAL_XOR, 0);
 GENERIC_OPERATION_PROXY(LogicalNot, STRUCT_LOGICAL_NOT, 0);
 
-class MathStructureComparisonProxy : public MathStructure {
+class MathStructureComparisonProxy final : public MathStructure {
 public:
   MathStructureComparisonProxy(MathStructure *left, ComparisonType type,
                                MathStructure *right)
@@ -271,7 +271,7 @@ public:
   }
 };
 
-class MathStructureFunctionProxy : public MathStructure {
+class MathStructureFunctionProxy final : public MathStructure {
 public:
   MathStructureFunctionProxy(QalcRef<MathFunction> function, py::args args)
       : MathStructure() {
@@ -310,7 +310,7 @@ public:
 STUB_PROXY(Symbolic);
 STUB_PROXY(Unit);
 
-class MathStructurePowerProxy : public MathStructure {
+class MathStructurePowerProxy final : public MathStructure {
 public:
   MathStructurePowerProxy(MathStructure *base, MathStructure *exponent)
       : MathStructure() {
