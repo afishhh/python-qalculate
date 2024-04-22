@@ -289,7 +289,11 @@ public:
 
   static void init(qalc_class_<MathStructureFunctionProxy, Base> &c) {
     c.def(py::init<QalcRef<MathFunction>, py::args>(), py::arg("function"),
-          py::pos_only{});
+          py::pos_only{})
+        .def_property_readonly("function",
+                               [](MathStructureFunctionProxy const &self) {
+                                 return QalcRef(self.o_function);
+                               });
   }
 
   void repr(std::string &output) const {
@@ -308,7 +312,30 @@ public:
 };
 
 STUB_PROXY(Symbolic);
-STUB_PROXY(Unit);
+
+class MathStructureUnitProxy final : public MathStructure {
+public:
+  MathStructureUnitProxy(Unit *unit) {
+    PROXY_INIT;
+    setType(STRUCT_UNIT);
+    setUnit(unit);
+  }
+
+  using Base = MathStructure;
+
+  static void init(qalc_class_<MathStructureUnitProxy, Base> &c) {
+    c.def(py::init<Unit *>(), py::arg("unit"))
+        .def_property_readonly("unit", [](MathStructureUnitProxy const &self) {
+          return QalcRef(self.o_unit);
+        });
+  }
+
+  void repr(std::string &output) const {
+    output += "MathStructure.Unit(unit=";
+    output += py::cast(this->unit()).attr("repr")().cast<std::string_view>();
+    output += ")";
+  }
+};
 
 class MathStructurePowerProxy final : public MathStructure {
 public:

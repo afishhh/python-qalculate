@@ -208,6 +208,18 @@ qalc_class_<UnknownVariable> add_unknown_variable(py::module_ &m) {
 qalc_class_<Unit> add_unit(py::module_ &m) {
   return add_unit_properties(
       qalc_class_<Unit, ExpressionItem>(m, "Unit")
+          .DEF_EXPRESSION_ITEM_GETTER(CALCULATOR->getUnit, Unit)
+
+          .def_property_readonly_static(
+              "DEGREE",
+              [](py::handle) { return QalcRef(CALCULATOR->getDegUnit()); })
+
+          .def_property_readonly_static(
+              "GRADIAN", [](py::handle) { return QalcRef(CALCULATOR->getGraUnit()); })
+
+          .def_property_readonly_static(
+              "RADIAN", [](py::handle) { return QalcRef(CALCULATOR->getRadUnit()); })
+
           .def_property_readonly(
               "is_si", [](Unit const &self) { return self.isSIUnit(); })
           .def_property(

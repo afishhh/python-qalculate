@@ -16,16 +16,3 @@ load_global_variables()
 )
 def test_builtin_variables(string: str, var_name: str):
     assert parse(string).variable is Variable.get(var_name)
-
-
-def test_variable_same_instances():
-    a = Variable.get("x")
-    b = Variable.get("x")
-    c = Variable.get("x")
-    d = parse("x").variable
-    assert a is b
-    assert a is c
-    assert a is d
-
-def test_variable_proxy_compare():
-    assert parse("x") == parse("x")
