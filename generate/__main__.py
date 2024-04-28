@@ -1,5 +1,4 @@
 from pathlib import Path
-import string
 import re
 from contextlib import contextmanager
 import sys
@@ -87,7 +86,7 @@ def properties_for(
                     continue
 
                 setter = struct.methods.get(f"set{camel_to_pascal(member.name)}", None)
-                docarg = f', {cpp_string(member.docstring)}' if member.docstring else ""
+                docarg = f", {cpp_string(member.docstring)}" if member.docstring else ""
                 if setter and len(setter.params) == 1 and allow_readwrite:
                     impl.write(
                         f'.def_property("{mapped}", &{name}::{member.name}, &{name}::{setter.name}{docarg})\n'
@@ -286,13 +285,15 @@ with function_declaration(
 ):
     with impl.indent("return class_\n"):
         for qalc_function, operator in number_operators:
-            with impl.indent(f'.def("{operator}", [](Number const &self, Number const &other) {{\n'):
+            with impl.indent(
+                f'.def("{operator}", [](Number const &self, Number const &other) {{\n'
+            ):
                 impl.write(f"Number result = self;\n")
                 with impl.indent(f"if(!result.{qalc_function}(other))\n"):
                     impl.write(f'throw py::value_error("Operation failed");\n')
                 impl.write("return result;\n")
-            impl.write("}, py::is_operator{})\n");
-        impl.write(";\n");
+            impl.write("}, py::is_operator{})\n")
+        impl.write(";\n")
 
 
 struct = qalculate_sources.enum("StructureType")
@@ -472,12 +473,17 @@ impl.write('#include "proxies.hh"\n')
 with function_declaration(
     "void MathStructure_repr(MathStructure const *mstruct, std::string &output)"
 ):
-    with impl.indent("switch(mstruct->type()) {\n"):
-        for name in structure_types:
-            impl.write(f"case STRUCT_{name}:\n")
+    impl.write("switch(mstruct->type()) {\n")
+    for name in structure_types:
+        with impl.indent(f"case STRUCT_{name}:\n"):
             class_ = f"MathStructure{snake_to_pascal(name)}Proxy"
             impl.write(f"(({class_} const*)mstruct)->repr(output);\n")
             impl.write(f"break;\n")
+    with impl.indent("default:\n"):
+        impl.write(
+            'throw std::runtime_error("Cannot stringify unknown math structure type " + std::to_string(mstruct->type()));\n'
+        )
+        impl.write("break;\n")
     impl.write("}\n")
 
 with function_declaration(

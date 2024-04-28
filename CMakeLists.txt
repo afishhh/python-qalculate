@@ -82,6 +82,12 @@ pybind11_add_module(
 	${SOURCES}
 )
 
+target_compile_options(
+	python-qalculate
+	PRIVATE
+	-Wall -Wextra -pedantic
+)
+
 target_link_libraries(
 	python-qalculate
 	PRIVATE

@@ -38,6 +38,8 @@ template <typename T> class QalcRef {
       std::cerr << '\n';
       (void)new_refs;
     }
+#else  // PYQALCULATE_DEBUG_REFS
+    (void)new_refs;
 #endif // PYQALCULATE_DEBUG_REFS
   }
 

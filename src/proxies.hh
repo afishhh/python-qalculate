@@ -71,7 +71,7 @@ public:
 };
 
 inline qalc_class_<MathStructure> &
-init_math_structure_children(py::module_ &m,
+init_math_structure_children(py::module_ &,
                              qalc_class_<MathStructure> &mstruct) {
   qalc_class_<MathStructureSequence, MathStructure>(mstruct, "Sequence")
       .def("append", &MathStructureSequence::append, py::is_operator{})

@@ -1,4 +1,5 @@
 from collections import deque
+from contextlib import contextmanager
 from pathlib import Path
 import string
 from typing import (
@@ -10,17 +11,6 @@ from typing import (
     TextIO,
     TypeVar,
 )
-
-
-class _Dedenter:
-    def __init__(self, parent: "IndentedWriter") -> None:
-        self._parent = parent
-
-    def __enter__(self):
-        return None
-
-    def __exit__(self, type, value, traceback):
-        return self._parent.dedent()
 
 
 class IndentedWriter:
@@ -56,10 +46,12 @@ class IndentedWriter:
     def write(self, text: str):
         self.writelines(text.splitlines(keepends=True))
 
-    def indent(self, text: str = "") -> ContextManager[None]:
+    @contextmanager
+    def indent(self, text: str = ""):
         self.write(text)
         self._indent_level += 1
-        return _Dedenter(self)
+        yield
+        self._indent_level -= 1
 
     def dedent(self, text: str = ""):
         self._indent_level -= 1
@@ -136,8 +128,10 @@ def camel_to_snake(name: str):
         name = name[:i] + "_" + name[i].lower() + name[i + 1 :]
     return name
 
+
 def camel_to_pascal(name: str):
     return name[0].upper() + name[1:]
+
 
 def pascal_to_snake(name: str):
     name = name[0].lower() + name[1:]
@@ -153,8 +147,11 @@ def snake_to_camel(name: str):
     name = name[0].lower() + name[1:]
     return name
 
+
 def cpp_string(text: str):
-    return "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
+    return (
+        '"' + text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
+    )
 
 
 class PeekableIterator(Iterator[T]):
