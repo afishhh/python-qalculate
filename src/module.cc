@@ -228,7 +228,7 @@ PYBIND11_MODULE(qalculate, m) {
 
   // FIXME: Clean this up finally...
   add_math_structure_proxies(init_math_structure_children(
-      m, add_math_structure_operators(init_auto_math_structure(
+        m, add_math_structure_operators(init_auto_math_structure(
              qalc_class_<MathStructure>(m, "MathStructure", py::is_final{})
                  .def("compare", &MathStructure::compare)
                  .def("compare_approximately",
@@ -280,7 +280,7 @@ PYBIND11_MODULE(qalculate, m) {
   m.def("set_message_print_options",
         [](PrintOptions &opts) { CALCULATOR->setMessagePrintOptions(opts); });
 
-  m.def("calculate", &calculate, py::arg("mstruct"), py::pos_only{},
+  m.def("calculate", &calculate, py::arg("expression"), py::pos_only{},
         py::arg("options") = &global_evaluation_options, py::arg("to") = "");
 
   m.def(
@@ -297,7 +297,7 @@ PYBIND11_MODULE(qalculate, m) {
         return calculate(CALCULATOR->parse(expression, options.parse_options),
                          options, to);
       },
-      py::arg("mstruct"), py::arg("options") = &global_evaluation_options,
+      py::arg("expression"), py::arg("options") = &global_evaluation_options,
       py::arg("to") = "");
 
   m.def(

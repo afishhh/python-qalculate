@@ -310,11 +310,7 @@ class PyClass:
                         writer.write(f" = {param.default}")
             writer.write(")\n")
 
-    def write_pyclass_expression(
-        self,
-        writer: IndentedWriter,
-        module_expression: str
-    ):
+    def write_pyclass_expression(self, writer: IndentedWriter, module_expression: str):
         writer.indent(f"{self._pyclass}({module_expression}, {cpp_string(self.name)})")
         if not self._fields and not self._methods and not self._properties:
             writer.dedent()
@@ -375,31 +371,37 @@ class PyClass:
                 return "None"
             return repr(type.name)
 
+        prop_like: list[tuple[str, Type, bool, str]] = []
+
         for field in self._fields:
-            types.write("@property\n")
-            return_type = pythonize_type(field.type)
-            with types.indent(f"def {field.name}(self) -> {return_type}:\n"):
-                if field.docstring:
-                    types.write(f'"""{repr(field.docstring)[1:-1]}"""\n')
-                types.write("...\n")
-            types.write("\n")
+            prop_like.append((field.name, field.type, True, field.docstring))
 
         for prop in self._properties:
-            types.write("@property\n")
             assert prop._getter
-            return_type = pythonize_type(prop._getter[1])
-            with types.indent(f"def {prop._name}(self) -> {return_type}:\n"):
-                if prop._docstring:
-                    types.write(f'"""{repr(prop._docstring)[1:-1]}"""\n')
+            prop_like.append((prop._name, prop._getter[1], prop._setter is not None, prop._docstring))
+
+        for name, type, writeable, docstring in prop_like:
+            types.write("@property\n")
+            return_type = pythonize_type(type)
+            with types.indent(f"def {name}(self) -> {return_type}:\n"):
+                if docstring:
+                    types.write(f'"""{repr(docstring)[1:-1]}"""\n')
                 types.write("...\n")
+
+            if writeable:
+                types.write(f"@{name}.setter\n")
+                with types.indent(f"def {name}(self, value: {return_type}) -> None:\n"):
+                    types.write("...\n")
+
             types.write("\n")
 
         for method in self._methods:
             types.write(f"def {method.name}(")
-            if method.receiver:
+            has_self = method.receiver or method.name == "__init__"
+            if has_self:
                 types.write("self")
             for parameter in method.parameters:
-                if method.receiver or parameter is not method.parameters[0]:
+                if has_self or parameter is not method.parameters[0]:
                     types.write(", ")
                 if isinstance(parameter, _KwOnly):
                     types.write("*")

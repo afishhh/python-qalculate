@@ -1,9 +1,11 @@
+from io import StringIO
 from pathlib import Path
 import re
 from contextlib import contextmanager
 import sys
 
 from generate.bindings import KW_ONLY, PyClass
+from generate.merge_types import merge_typing_files
 
 from .parsing import (
     Accessibility,
@@ -17,6 +19,9 @@ from .utils import *
 
 libqalculate_src = Path(sys.argv[1]) / "libqalculate"
 output_directory = Path(sys.argv[2])
+types_output = (
+    Path(sys.argv[3]) if len(sys.argv) >= 4 else output_directory / "types.pyi"
+)
 qalculate_sources = ParsedSourceFiles(libqalculate_src.glob("*.h"))
 
 MATH_STRUCTURE_CLASS = "qalc_class_<MathStructure>"
@@ -24,7 +29,7 @@ MATH_STRUCTURE_CLASS = "qalc_class_<MathStructure>"
 output_directory.mkdir(exist_ok=True)
 header = IndentedWriter((output_directory / "generated.hh").open("w+"))
 impl = IndentedWriter((output_directory / "generated.cc").open("w+"))
-typings = IndentedWriter((output_directory / "types.pyi").open("w+"))
+typings = IndentedWriter(StringIO())
 
 typings.write("import typing\n")
 
@@ -641,3 +646,12 @@ with function_declaration("void add_builtin_functions(pybind11::module_ &m)"):
 
 header.close()
 impl.close()
+
+
+assert isinstance(typings._inner, StringIO)
+types_output.write_text(
+    merge_typing_files(
+        typings._inner.getvalue(),
+        Path(__file__).parent.parent / "src" / "types.pyi",
+    )
+)
