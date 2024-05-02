@@ -6,6 +6,7 @@ import sys
 
 from generate.bindings import KW_ONLY, PyClass
 from generate.merge_types import merge_typing_files
+from generate.output import OutputDirectory
 
 from .parsing import (
     Accessibility,
@@ -18,17 +19,16 @@ from .parsing import (
 from .utils import *
 
 libqalculate_src = Path(sys.argv[1]) / "libqalculate"
-output_directory = Path(sys.argv[2])
+output_directory = OutputDirectory(Path(sys.argv[2]))
 types_output = (
-    Path(sys.argv[3]) if len(sys.argv) >= 4 else output_directory / "types.pyi"
+    Path(sys.argv[3]) if len(sys.argv) >= 4 else output_directory.path / "types.pyi"
 )
 qalculate_sources = ParsedSourceFiles(libqalculate_src.glob("*.h"))
 
 MATH_STRUCTURE_CLASS = "qalc_class_<MathStructure>"
 
-output_directory.mkdir(exist_ok=True)
-header = IndentedWriter((output_directory / "generated.hh").open("w+"))
-impl = IndentedWriter((output_directory / "generated.cc").open("w+"))
+header = IndentedWriter(output_directory.writer("generated.hh"))
+impl = IndentedWriter(output_directory.writer("generated.cc"))
 typings = IndentedWriter(StringIO())
 
 typings.write("import typing\n")
@@ -655,3 +655,5 @@ types_output.write_text(
         Path(__file__).parent.parent / "src" / "types.pyi",
     )
 )
+
+output_directory.close()
