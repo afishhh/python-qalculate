@@ -3,11 +3,15 @@ import re
 from contextlib import contextmanager
 import sys
 
+from generate.bindings import PyClass
+
 from .parsing import (
     Accessibility,
+    Parameter,
     ParsedSourceFiles,
     SimpleType,
     Struct,
+    Type,
 )
 from .utils import *
 
@@ -20,6 +24,22 @@ MATH_STRUCTURE_CLASS = "qalc_class_<MathStructure>"
 output_directory.mkdir(exist_ok=True)
 header = IndentedWriter((output_directory / "generated.hh").open("w+"))
 impl = IndentedWriter((output_directory / "generated.cc").open("w+"))
+
+classes = {
+    "MathStructure": PyClass(
+        "MathStructure", extra=["QalcRef<MathStructure>"], sources=qalculate_sources
+    ),
+    "ExpressionItem": PyClass(
+        "ExpressionItem", extra=["QalcRef<ExpressionItem>"], sources=qalculate_sources
+    ),
+    "Number": PyClass("Number", sources=qalculate_sources),
+    "Assumptions": PyClass(
+        "Assumptions", wrapper="class PAssumptions", sources=qalculate_sources
+    ),
+    "Unit": PyClass(
+        "Unit", extra=["QalcRef<Unit>, ExpressionItem"], sources=qalculate_sources
+    ),
+}
 
 header.write(
     """
@@ -60,47 +80,39 @@ def iter_properties(
 
 
 def properties_for(
-    name: str,
+    pyclass: PyClass,
     *,
     allow_readwrite: bool = False,
     require_getter_const: bool = True,
     renames: dict[str, str | None] = {},
     extra_for_repr: Iterable[str] = [],
-    pybind_class: str | None = None,
     add_repr_from_rw: bool = False,
 ):
-    class_type = f"pybind11::class_<{name}>" if not pybind_class else pybind_class
+    struct = pyclass.underlying_type
+    added_rw_props = list(extra_for_repr)
 
-    struct = qalculate_sources.structure(name)
-    with function_declaration(
-        f"{class_type} &add_{pascal_to_snake(name)}_properties({class_type} &class_)"
-    ):
-        with impl.indent("return class_\n"):
-            added_rw_props = list(extra_for_repr)
+    for member in iter_properties(struct, require_getter_const=require_getter_const):
+        mapped = renames.get(member.name, camel_to_snake(member.name))
+        if mapped is None:
+            continue
 
-            for member in iter_properties(
-                struct, require_getter_const=require_getter_const
-            ):
-                mapped = renames.get(member.name, camel_to_snake(member.name))
-                if mapped is None:
-                    continue
+        setter = struct.methods.get(f"set{camel_to_pascal(member.name)}", None)
 
-                setter = struct.methods.get(f"set{camel_to_pascal(member.name)}", None)
-                docarg = f", {cpp_string(member.docstring)}" if member.docstring else ""
-                if setter and len(setter.params) == 1 and allow_readwrite:
-                    impl.write(
-                        f'.def_property("{mapped}", &{name}::{member.name}, &{name}::{setter.name}{docarg})\n'
-                    )
+        property = pyclass.property(mapped, docstring=member.docstring)
+        property.getter(
+            f"&{pyclass.underlying_name}::{member.name}", type=member.return_type
+        )
+        if setter and len(setter.params) == 1 and allow_readwrite:
+            assert setter.params[0] != "..."
+            property.setter(
+                f"&{pyclass.underlying_name}::{setter.name}",
+                param_type=setter.params[0].type,
+            )
+            added_rw_props.append(mapped)
 
-                    added_rw_props.append(mapped)
-                else:
-                    impl.write(
-                        f'.def_property_readonly("{mapped}", &{name}::{member.name}{docarg})\n'
-                    )
-
-            if add_repr_from_rw:
-                define_repr(name, added_rw_props)
-        impl.write(";\n")
+    if add_repr_from_rw:
+        pass
+        # define_repr(pyclass, added_rw_props)
 
 
 def define_repr(

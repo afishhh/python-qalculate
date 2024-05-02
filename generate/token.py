@@ -22,6 +22,7 @@ def tokenize(text: str) -> Iterable[Token]:
         "_", ""
     ).replace("$", "")
 
+    PUNCT = string.punctuation.replace("_", "")
     LEN2_PUNCT = {
         "::",
         "+=",
@@ -60,7 +61,7 @@ def tokenize(text: str) -> Iterable[Token]:
             text = text[end + 2 :]
         elif text.startswith("#"):
             text = text[text.find("\n") :]
-        elif text[0] in string.punctuation:
+        elif text[0] in PUNCT:
             if text[0] == '"':
                 i = 0
                 while (i := i + 1) < len(text):
