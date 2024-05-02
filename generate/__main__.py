@@ -622,7 +622,7 @@ add_mode = {
 }
 builtin_function_classes: list[PyClass] = []
 for pyclass in classes.values():
-    if pyclass.name.endswith("Function"):
+    if pyclass.name.endswith("Function") and pyclass.name != "MathFunction":
         builtin_function_classes.append(pyclass)
     else:
         mode = "create" if pyclass.name in add_mode else "modify"
