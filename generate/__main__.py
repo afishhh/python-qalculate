@@ -40,11 +40,20 @@ classes = {
         "Assumptions", wrapper="class PAssumptions", sources=qalculate_sources
     ),
     "Unit": PyClass(
-        "Unit", extra=["QalcRef<Unit>, ExpressionItem"], sources=qalculate_sources
+        "Unit",
+        extra=["QalcRef<Unit>"],
+        bases=["ExpressionItem"],
+        sources=qalculate_sources,
     ),
     "EvaluationOptions": PyClass(
         "EvaluationOptions",
         wrapper="class PEvaluationOptions",
+        sources=qalculate_sources,
+    ),
+    "MathFunction": PyClass(
+        "MathFunction",
+        extra=["QalcRef<MathFunction>"],
+        bases=["ExpressionItem"],
         sources=qalculate_sources,
     ),
 }
@@ -569,12 +578,16 @@ BUILTIN_FUNCTION_REGEX = re.compile(
     "^DECLARE_BUILTIN_FUNCTION.*?\\(([a-zA-Z_]+),\\s+([a-zA-Z_]+)\\)", re.MULTILINE
 )
 
-with function_declaration("void add_builtin_functions(py::module_ &m)"):
-    for match in BUILTIN_FUNCTION_REGEX.finditer(
-        qalculate_sources.get("BuiltinFunctions.h").text
-    ):
-        name, id = match.groups()
-        impl.write(f'(void)qalc_class_<{name}, MathFunction>(m, "{name}");\n')
+for match in BUILTIN_FUNCTION_REGEX.finditer(
+    qalculate_sources.get("BuiltinFunctions.h").text
+):
+    name, id = match.groups()
+    classes[name] = PyClass(
+        name,
+        extra=[f"QalcRef<{name}>"],
+        bases=["MathFunction"],
+        sources=qalculate_sources,
+    )
 
 properties_for(
     classes["Assumptions"],
@@ -607,13 +620,24 @@ add_mode = {
     "ParseOptions",
     "EvaluationOptions",
 }
+builtin_function_classes: list[PyClass] = []
 for pyclass in classes.values():
-    mode = "create" if pyclass.name in add_mode else "modify"
-    name = "add_" if mode == "create" else "init_"
-    name += "auto_"
-    name += pascal_to_snake(pyclass.name)
-    pyclass.write_init_function(name, header, impl, mode=mode)
+    if pyclass.name.endswith("Function"):
+        builtin_function_classes.append(pyclass)
+    else:
+        mode = "create" if pyclass.name in add_mode else "modify"
+        name = "add_" if mode == "create" else "init_"
+        name += "auto_"
+        name += pascal_to_snake(pyclass.name)
+        pyclass.write_init_function(name, header, impl, mode=mode)
     pyclass.write_types(typings)
+
+with function_declaration("void add_builtin_functions(pybind11::module_ &m)"):
+    for pyclass in builtin_function_classes:
+        impl.write("(void)")
+        pyclass.write_pyclass_expression(impl, "m")
+        impl.write(";\n")
+
 
 header.close()
 impl.close()

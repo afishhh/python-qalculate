@@ -100,6 +100,7 @@ class PyClass:
         wrapper: str | None = None,
         bound_type: Struct | str | None = None,
         extra: list[str] = [],
+        bases: list[str] = [],
         sources: ParsedSource | None = None,
     ) -> None:
         if bound_type is None:
@@ -111,13 +112,19 @@ class PyClass:
             bound_type = bound_type.name
         else:
             assert sources is not None
-            self._underlying_struct = sources.structure(bound_type)
+            try:
+                self._underlying_struct = sources.structure(bound_type)
+            except KeyError:
+                self._underlying_struct = None
         self._impl_type_name = wrapper or bound_type
         self._bound_type = bound_type
         self._pyclass = f"pybind11::class_<{wrapper or bound_type}"
         for extra_arg in extra:
             self._pyclass += f", {extra_arg}"
+        for base in bases:
+            self._pyclass += f", {base}"
         self._pyclass += ">"
+        self._bases = bases
         self._methods: list[_Method] = []
         self._fields: list[_Field] = []
         self._properties: list[PyProperty] = []
@@ -132,6 +139,7 @@ class PyClass:
 
     @property
     def underlying_type(self) -> Struct:
+        assert self._underlying_struct
         return self._underlying_struct
 
     @property
@@ -207,6 +215,114 @@ class PyClass:
             _Field(type, name, cpp_name, docstring, mode == "readwrite")
         )
 
+    def write_init_calls(self, writer: IndentedWriter):
+        for field in self._fields:
+            writer.write(".def")
+            if field.writeable:
+                writer.write("_readwrite")
+            else:
+                writer.write("_readonly")
+
+            writer.write(
+                f"({cpp_string(field.name)}, &{self._bound_type}::{field.cpp_name})\n"
+            )
+
+        for property in self._properties:
+            writer.write(".def_property")
+            if property._static:
+                writer.write("_static")
+            if property._setter is None:
+                writer.write("_readonly")
+
+            assert property._getter is not None
+            getter = property._getter[0]
+
+            writer.write(f"({cpp_string(property._name)}, ")
+            if isinstance(getter, str):
+                writer.write(getter)
+            else:
+                writer.write("[](")
+                if not property._static:
+                    writer.write(f"{self._bound_type} const& self")
+                with writer.indent(") {"):
+                    writer.write(getter.getvalue())
+                writer.write("}")
+
+            if setter := property._setter:
+                if isinstance(setter, str):
+                    writer.write(f", {setter}")
+                else:
+                    writer.write(f", [](")
+                    if not property._static:
+                        writer.write(f"{self._bound_type} const& self, ")
+                    writer.write(f"{setter[1]} value")
+                    with writer.indent(") {"):
+                        writer.write(setter[0].getvalue())
+                    writer.write("}")
+
+            writer.write(")\n")
+
+        for method in self._methods:
+            writer.write(".def")
+            if not method.receiver and method.name != "__init__":
+                writer.write("_static")
+
+            if method.name == "__init__":
+                assert method.receiver is None
+                assert method.extra == []
+                writer.write(f"(pybind11::init(")
+            else:
+                writer.write(f"({cpp_string(method.name)}, ")
+
+            writer.write(f"[](")
+            first_param = True
+            if method.receiver:
+                first_param = False
+                writer.write(f"{method.receiver.type} {method.receiver.name}")
+            for param in method.parameters:
+                if not isinstance(param, _KwOnly):
+                    if not first_param:
+                        writer.write(", ")
+                    else:
+                        first_param = False
+                    writer.write(f"{param.type} {param.name}")
+            writer.write(")")
+
+            if method.name != "__init__":
+                writer.write(f" -> {method.return_type}")
+
+            with writer.indent("{\n"):
+                writer.write(method.body.getvalue())
+            writer.write("}")
+
+            if method.name == "__init__":
+                writer.write(")")
+
+            for extra in method.extra:
+                writer.write(f", {extra}")
+            for param in method.parameters:
+                if isinstance(param, _KwOnly):
+                    writer.write(", pybind11::kw_only{}")
+                else:
+                    assert param.name
+                    writer.write(f", pybind11::arg({cpp_string(param.name)})")
+                    if param.default:
+                        writer.write(f" = {param.default}")
+            writer.write(")\n")
+
+    def write_pyclass_expression(
+        self,
+        writer: IndentedWriter,
+        module_expression: str
+    ):
+        writer.indent(f"{self._pyclass}({module_expression}, {cpp_string(self.name)})")
+        if not self._fields and not self._methods and not self._properties:
+            writer.dedent()
+            return
+        writer.write("\n")
+        self.write_init_calls(writer)
+        writer.dedent()
+
     def write_init_function(
         self,
         name: str,
@@ -219,111 +335,25 @@ class PyClass:
             header.write(f"{self._pyclass} &{name}({self._pyclass} &class_);\n")
             impl.indent(f"{self._pyclass} &{name}({self._pyclass} &class_) {{\n")
             impl.indent("return class_\n")
+            self.write_init_calls(impl)
+            impl.dedent(";\n")
         else:
             header.write(f"{self._pyclass} {name}(pybind11::module_ &m);\n")
             impl.indent(f"{self._pyclass} {name}(pybind11::module_ &m) {{\n")
-            impl.indent(f"return {self._pyclass}(m, {cpp_string(self.name)})\n")
+            impl.write(f"return ")
+            self.write_pyclass_expression(impl, "m")
+            impl.write(";\n")
 
-        for field in self._fields:
-            impl.write(".def")
-            if field.writeable:
-                impl.write("_readwrite")
-            else:
-                impl.write("_readonly")
-
-            impl.write(
-                f"({cpp_string(field.name)}, &{self._bound_type}::{field.cpp_name})\n"
-            )
-
-        for property in self._properties:
-            impl.write(".def_property")
-            if property._static:
-                impl.write("_static")
-            if property._setter is None:
-                impl.write("_readonly")
-
-            assert property._getter is not None
-            getter = property._getter[0]
-
-            impl.write(f"({cpp_string(property._name)}, ")
-            if isinstance(getter, str):
-                impl.write(getter)
-            else:
-                impl.write("[](")
-                if not property._static:
-                    impl.write(f"{self._bound_type} const& self")
-                with impl.indent(") {"):
-                    impl.write(getter.getvalue())
-                impl.write("}")
-
-            if setter := property._setter:
-                if isinstance(setter, str):
-                    impl.write(f", {setter}")
-                else:
-                    impl.write(f", [](")
-                    if not property._static:
-                        impl.write(f"{self._bound_type} const& self, ")
-                    impl.write(f"{setter[1]} value")
-                    with impl.indent(") {"):
-                        impl.write(setter[0].getvalue())
-                    impl.write("}")
-
-            impl.write(")\n")
-
-        for method in self._methods:
-            impl.write(".def")
-            if not method.receiver and method.name != "__init__":
-                impl.write("_static")
-
-            if method.name == "__init__":
-                assert method.receiver is None
-                assert method.extra == []
-                impl.write(f"(pybind11::init(")
-            else:
-                impl.write(f"({cpp_string(method.name)}, ")
-
-            impl.write(f"[](")
-            first_param = True
-            if method.receiver:
-                first_param = False
-                impl.write(f"{method.receiver.type} {method.receiver.name}")
-            for param in method.parameters:
-                if not isinstance(param, _KwOnly):
-                    if not first_param:
-                        impl.write(", ")
-                    else:
-                        first_param = False
-                    impl.write(f"{param.type} {param.name}")
-            impl.write(")")
-
-            if method.name != "__init__":
-                impl.write(f" -> {method.return_type}")
-
-            with impl.indent("{\n"):
-                impl.write(method.body.getvalue())
-            impl.write("}")
-
-            if method.name == "__init__":
-                impl.write(")")
-
-            for extra in method.extra:
-                impl.write(f", {extra}")
-            for param in method.parameters:
-                if isinstance(param, _KwOnly):
-                    impl.write(", pybind11::kw_only{}")
-                else:
-                    assert param.name
-                    impl.write(f", pybind11::arg({cpp_string(param.name)})")
-                    if param.default:
-                        impl.write(f" = {param.default}")
-            impl.write(")\n")
-
-        impl.write(";\n")
-        impl.dedent()
         impl.dedent("}\n")
 
     def write_types(self, types: IndentedWriter):
-        types.indent(f"class {self.name}:\n")
+        types.write(f"class {self.name}(")
+        for base in self._bases:
+            types.write(base)
+        types.indent("):\n")
+
+        if not self._fields and not self._methods and not self._properties:
+            types.write("pass\n")
 
         def pythonize_type(type: Type) -> str:
             while isinstance(type, PointerType):
