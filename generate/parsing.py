@@ -3,7 +3,7 @@ import enum
 from pathlib import Path
 import re
 import string
-from typing import Iterable, Literal, Sequence
+from typing import Callable, Iterable, Literal, Sequence
 from dataclasses import dataclass, field
 
 from .token import (
@@ -15,7 +15,7 @@ from .token import (
     take_meaningful,
     tokenize,
 )
-from .utils import PeekableIterator, find, reverse_find, split_once
+from .utils import T, PeekableIterator, find, reverse_find, split_once
 
 
 def find_end_of_block(text: str, start: int = 0) -> int:
@@ -55,10 +55,40 @@ def take_namespaced_name(it: PeekableIterator[Token]) -> str:
     return result
 
 
+def _parse_method(
+    method: Callable[[PeekableIterator[Token]], T]
+) -> Callable[[str | PeekableIterator[Token]], T]:
+    def fun(source: str | PeekableIterator[Token]):
+        if isinstance(source, str):
+            it = PeekableIterator(iter(tokenize(source)))
+        else:
+            it = source
+
+        result = method(it)
+
+        if isinstance(source, str):
+            try:
+                take_meaningful(it.peeker())
+                raise ValueError(f"Trailing tokens after parse: {join_tokens(it)}")
+            except StopIteration:
+                pass
+
+        return result
+
+    return fun
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Type(ABC):
     const: bool = False
     volatile: bool = False
+
+    @_parse_method
+    @staticmethod
+    def parse(tokens: PeekableIterator[Token]):
+        type, remaining = take_type(tokens)
+        tokens._inner = iter(remaining)
+        return type
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,7 +302,47 @@ class Accessibility(enum.Enum):
 class Parameter:
     type: Type
     name: str | None
-    default: str | None
+    default: str | None = None
+
+    @_parse_method
+    @staticmethod
+    def parse(it: PeekableIterator[Token]) -> "Parameter":
+        param_type, tokens = take_type(it)
+
+        it = PeekableIterator(tokens)
+        if (token := it.peek()) and token.text == "(":
+            raise NotImplementedError("Function pointer parameters in Parameter.parse")
+
+        if (token := it.peek()) and token.type == "ident":
+            param_name = token.text
+            next(it)
+        else:
+            param_name = None
+
+        if (token := it.peek()) and token.text == "[":
+            next(it)
+            param_type = ArrayType(param_type, size=int(next(it).parse_int()))
+            assert next(it).text == "]"
+
+        skip_noncode(it)
+
+        if (token := it.peek()) and token.text == "=":
+            next(it)
+
+            default_tokens = []
+
+            for token in it:
+                if token.text == ",":
+                    it.put_back(token)
+                    break
+                else:
+                    default_tokens.append(token)
+
+            param_default = join_tokens(default_tokens)
+        else:
+            param_default = None
+
+        return Parameter(param_type, param_name, param_default)
 
 
 @dataclass(frozen=True, slots=True)
