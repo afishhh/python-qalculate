@@ -48,6 +48,9 @@ class IndentedWriter:
     def writelines(self, lines: list[str]):
         for line in lines:
             if not self._mid_line:
+                if not line.strip():
+                    self._inner.write("\n")
+                    continue
                 self._inner.write(self._indent)
             self._inner.write(line)
             self._mid_line = not line.endswith("\n")
