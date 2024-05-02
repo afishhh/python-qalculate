@@ -15,12 +15,12 @@
             inherit (self.packages.${system}) libqalculate;
           };
           libqalculate = pkgs.libqalculate.overrideAttrs (old: {
-            version = "unstable-2023-04-07";
+            version = "unstable-2023-05-02";
             src = "" + builtins.fetchTree {
               type = "github";
               owner = "Qalculate";
               repo = "libqalculate";
-              rev = "3d2b5dc3b3dce43e0e7b8e222c738bead571ad67";
+              rev = "6473679b7b419740f72d396a305734382de6e821";
             };
           });
         };
