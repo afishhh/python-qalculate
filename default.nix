@@ -37,8 +37,6 @@ pkgs.stdenv.mkDerivation (self: {
     python3Packages.pytest
   ];
 
-  PYQALCULATE_LIBQALCULATE_SOURCE_PATH = "${pkgs.libqalculate.src}";
-
   buildInputs = [
     libqalculate
 
@@ -52,9 +50,7 @@ pkgs.stdenv.mkDerivation (self: {
     }))
   ];
 
-  cmakeFlags = [
-    "-DLIBQALCULATE_SOURCE_PATH=${libqalculate.src}"
-  ];
+  LIBQALCULATE_SOURCE_PATH = "${pkgs.libqalculate.src}";
 
   installPhase = ''
     mkdir -p "$out/lib/python3.11"

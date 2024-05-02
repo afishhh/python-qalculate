@@ -20,7 +20,7 @@ file(GLOB GENERATOR_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/generate/*.py")
 set(GENERATED_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 set(
-	LIBQALCULATE_SOURCE_PATH
+	LIBQALCULATE_SOURCE_PATH "$ENV{LIBQALCULATE_SOURCE_PATH}"
 	CACHE STRING "The libqalculate source path to use for generating bindings."
 )
 
