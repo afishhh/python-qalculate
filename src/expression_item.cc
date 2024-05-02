@@ -1,4 +1,5 @@
 #include "expression_items.hh"
+#include "generated.hh"
 #include "wrappers.hh"
 
 #include <libqalculate/ExpressionItem.h>
@@ -7,8 +8,7 @@
 #include <pybind11/stl.h>
 
 py::class_<ExpressionName> add_expression_name(py::module_ &m) {
-  return add_expression_name_auto(m)
-      .def(py::init())
+  return add_auto_expression_name(m)
       .def(py::init<std::string>(), py::arg("name"), py::pos_only{})
       .def(py::self == py::self)
       .def_property_readonly("underscore_removal_allowed",
@@ -86,7 +86,7 @@ qalc_class_<ExpressionItem> add_expression_item(py::module_ &m) {
       .def("__getitem__", &ExpressionNamesProxy::get, py::is_operator{})
       .def("__len__", &ExpressionNamesProxy::size, py::is_operator{});
 
-  return add_expression_item_properties(
+  return init_auto_expression_item(
              qalc_class_<ExpressionItem>(m, "ExpressionItem")
                  .def_property_readonly("names",
                                         [](QalcRef<ExpressionItem> item) {
@@ -175,7 +175,7 @@ qalc_class_<MathFunction> add_math_function(py::module_ &m) {
 }
 
 py::class_<PAssumptions> &add_assumptions(py::module_ &m) {
-  return add_assumptions_properties(
+  return init_auto_assumptions(
       py::class_<PAssumptions>(m, "Assumptions")
           .def(py::init([](AssumptionType type, AssumptionSign sign) {
                  PAssumptions assumptions;
@@ -206,7 +206,7 @@ qalc_class_<UnknownVariable> add_unknown_variable(py::module_ &m) {
 }
 
 qalc_class_<Unit> add_unit(py::module_ &m) {
-  return add_unit_properties(
+  return init_auto_unit(
       qalc_class_<Unit, ExpressionItem>(m, "Unit")
           .DEF_EXPRESSION_ITEM_GETTER(CALCULATOR->getUnit, Unit)
 
@@ -215,10 +215,12 @@ qalc_class_<Unit> add_unit(py::module_ &m) {
               [](py::handle) { return QalcRef(CALCULATOR->getDegUnit()); })
 
           .def_property_readonly_static(
-              "GRADIAN", [](py::handle) { return QalcRef(CALCULATOR->getGraUnit()); })
+              "GRADIAN",
+              [](py::handle) { return QalcRef(CALCULATOR->getGraUnit()); })
 
           .def_property_readonly_static(
-              "RADIAN", [](py::handle) { return QalcRef(CALCULATOR->getRadUnit()); })
+              "RADIAN",
+              [](py::handle) { return QalcRef(CALCULATOR->getRadUnit()); })
 
           .def_property_readonly(
               "is_si", [](Unit const &self) { return self.isSIUnit(); })

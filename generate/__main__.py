@@ -3,7 +3,7 @@ import re
 from contextlib import contextmanager
 import sys
 
-from generate.bindings import PyClass
+from generate.bindings import KW_ONLY, PyClass
 
 from .parsing import (
     Accessibility,
@@ -32,14 +32,22 @@ classes = {
     "ExpressionItem": PyClass(
         "ExpressionItem", extra=["QalcRef<ExpressionItem>"], sources=qalculate_sources
     ),
-    "Number": PyClass("Number", sources=qalculate_sources),
+    "ExpressionName": PyClass("ExpressionName", sources=qalculate_sources),
     "Assumptions": PyClass(
         "Assumptions", wrapper="class PAssumptions", sources=qalculate_sources
     ),
     "Unit": PyClass(
         "Unit", extra=["QalcRef<Unit>, ExpressionItem"], sources=qalculate_sources
     ),
+    "EvaluationOptions": PyClass(
+        "EvaluationOptions",
+        wrapper="class PEvaluationOptions",
+        sources=qalculate_sources,
+    ),
 }
+
+for simple_class in ("Number", "SortOptions", "PrintOptions", "ParseOptions"):
+    classes[simple_class] = PyClass(simple_class, sources=qalculate_sources)
 
 header.write(
     """
@@ -111,83 +119,77 @@ def properties_for(
             added_rw_props.append(mapped)
 
     if add_repr_from_rw:
-        pass
-        # define_repr(pyclass, added_rw_props)
+        define_repr_from_props(
+            pyclass,
+            added_rw_props,
+        )
 
 
-def define_repr(
-    name: str,
-    properties: Iterable[str],
-):
-    with impl.indent(f'.def("__repr__", [](py::object s) {{\n'):
-        impl.write(f'std::string output = "{name}(";\n')
-        impl.write(f"output.reserve(512);\n")
+def define_repr_from_props(pyclass: PyClass, properties: Iterable[str]):
+    with pyclass.method(
+        "std::string", "__repr__", operator=True, receiver="pybind11::object s"
+    ) as body:
+        body.write(f'std::string output = "{pyclass.name}(";\n')
+        body.write(f"output.reserve(512);\n")
         for i, name in enumerate(properties):
             if i != 0:
-                impl.write(f'output += ", ";\n')
-            impl.write(f'output += "{name}=";\n')
-            impl.write(
+                body.write(f'output += ", ";\n')
+            body.write(f'output += "{name}=";\n')
+            body.write(
                 f'output += s.attr("{name}").attr("__repr__")().cast<std::string_view>();\n'
             )
-        impl.write("return output;\n")
-    impl.write("})\n")
+        body.write("return output;\n")
 
 
 def options(
-    name: str,
+    pyclass: PyClass,
     *,
     exclude: set[str] = set(),
-    override_class=None,
-    func_name=None,
     define_new_default=False,
     pass_by_type: dict[str, str] = {},
 ):
-    if func_name is None:
-        func_name = f"add_{pascal_to_snake(name)}"
-
-    defaults_name = f"global_{pascal_to_snake(name)}"
+    defaults_name = f"global_{pascal_to_snake(pyclass.name)}"
 
     if define_new_default:
-        defaults_name = f"_autogen_{pascal_to_snake(name)}_defaults"
-        impl.write(f"{name} {defaults_name};\n")
+        defaults_name = f"_autogen_{pascal_to_snake(pyclass.name)}_defaults"
+        impl.write(f"{pyclass.name} {defaults_name};\n")
 
-    pybind_class = f"pybind11::class_<{override_class or name}>"
-    struct = qalculate_sources.structure(name)
+    options = {}
+    for field in pyclass.underlying_type.fields.values():
+        if field.accessibility != Accessibility.PUBLIC:
+            continue
 
-    with function_declaration(f"{pybind_class} {func_name}(pybind11::module_ &m)"):
-        with impl.indent(f'return {pybind_class}(m, "{name}")\n'):
-            options = {}
-            for field in struct.fields.values():
-                if field.accessibility != Accessibility.PUBLIC:
-                    continue
+        if field.name in exclude:
+            continue
 
-                if field.name in exclude:
-                    continue
+        pyclass.field(
+            camel_to_snake(field.name),
+            field.name,
+            mode="readwrite",
+            docstring=field.docstring,
+        )
 
-                impl.write(
-                    f'.def_readwrite("{camel_to_snake(field.name)}", &{name}::{field.name})\n'
-                )
+        options[field.name] = field.type
 
-                options[field.name] = field.type
+    parameters = [
+        Parameter(
+            type=Type.parse(pass_by_type.get(str(type), str(type))),
+            name=name,
+            default=f"{defaults_name}.{name}",
+        )
+        for name, type in options.items()
+    ]
 
-            impl.write(".def(py::init([](")
-            options = list(options.items())
-            for i, (field, type) in enumerate(options):
-                if i > 0:
-                    impl.write(", ")
-                impl.write(f"{pass_by_type.get(type, type)} {field}")
-            with impl.indent(") {\n"):
-                impl.write(f"{name} result;\n")
-                for field, type in options:
-                    impl.write(f"result.{field} = {field};\n")
-                impl.write(f"return result;\n")
-            impl.write("}), py::kw_only{}")
-            for field, type in options:
-                impl.write(f', py::arg("{field}") = {defaults_name}.{field}')
-            impl.write(")\n")
+    with pyclass.init(KW_ONLY, *parameters) as body:
+        body.write(f"{pyclass.implementation_type} result;\n")
+        for field in options.keys():
+            body.write(f"result.{field} = {field};\n")
+        body.write(f"return result;\n")
 
-            define_repr(name, (n for n, _ in options))
-        impl.write(";\n")
+    define_repr_from_props(
+        pyclass,
+        options.keys(),
+    )
 
 
 enums: list[str] = []
@@ -252,9 +254,9 @@ with function_declaration("void add_all_enums(pybind11::module_ &m)"):
 impl.write('#include "wrappers.hh"\n')
 impl.write('#include "options.hh"\n')
 
-options("SortOptions")
+options(classes["SortOptions"])
 options(
-    "PrintOptions",
+    classes["PrintOptions"],
     exclude={
         "prefix",
         "is_approximate",
@@ -262,16 +264,15 @@ options(
         "can_display_unicode_string_function",
     },
 )
-options("ParseOptions", exclude={"unended_function", "default_dataset"})
+options(classes["ParseOptions"], exclude={"unended_function", "default_dataset"})
 options(
-    "EvaluationOptions",
+    classes["EvaluationOptions"],
     exclude={"isolate_var", "protected_function"},
-    override_class="class PEvaluationOptions",
 )
 
 
 properties_for(
-    "Number",
+    classes["Number"],
     renames={
         "llintValue": None,
         "floatValue": None,
@@ -315,7 +316,7 @@ for variant in struct.members:
 structure_types.remove("ABORTED")
 
 properties_for(
-    "MathStructure",
+    classes["MathStructure"],
     renames={
         # Remove type-specific checks (use isinstance instead)
         **{f"is{snake_to_pascal(name)}": None for name in structure_types},
@@ -342,7 +343,6 @@ properties_for(
             )
         },
     },
-    pybind_class="qalc_class_<MathStructure>",
 )
 
 
@@ -357,7 +357,7 @@ math_structure_method_whitelist = {
     "structure",
 }
 
-math_structure_overrides = {
+math_structure_overrides: dict[str, tuple[str | None, str]] = {
     "EvaluationOptions": (
         "PEvaluationOptions",  # overriden type
         "PEvaluationOptions(global_evaluation_options)",  # overriden default value
@@ -365,80 +365,62 @@ math_structure_overrides = {
     "timeval": (None, "static_cast<struct timeval*>(nullptr)"),
 }
 
-with function_declaration(
-    f"{MATH_STRUCTURE_CLASS} &add_math_structure_methods({MATH_STRUCTURE_CLASS} &class_)"
-):
-    struct = qalculate_sources.structure("MathStructure")
-    with impl.indent("return class_\n"):
-        for method in struct.methods.values():
-            # FIXME: funny workaround (Cannot accept a std::vector* with pybind)
-            if method.name in ("integrate", "int"):
-                continue
+MathStructure = classes["MathStructure"]
+for method in MathStructure.underlying_type.methods.values():
+    # FIXME: funny workaround (Cannot accept a std::vector* with pybind)
+    if method.name in ("integrate", "int"):
+        continue
 
-            if method.name not in math_structure_method_whitelist:
-                continue
+    if method.name not in math_structure_method_whitelist:
+        continue
 
-            # Ignore variadic methods (FIXME: for now?)
-            if "..." in method.params:
-                continue
+    # Ignore variadic methods
+    if "..." in method.params:
+        print(f"warning: ignoring variadic MathStructure method: {method.params}")
+        continue
 
-            exposed_params = []
-            for param in method.params:
-                assert param != "..."
+    exposed_params = []
+    for param in method.params:
+        assert param != "..."
 
-                name = param.name
-                type = str(param.type)
-                default = param.default
+        name = param.name
+        type = param.type
+        default = param.default
 
-                cast_default = True
-                for pattern, override in math_structure_overrides.items():
-                    if pattern in type:
-                        if override[0] is None:
-                            name = None
-                        else:
-                            type = type.replace(pattern, override[0])
-                        default = override[1]
-                        cast_default = False
-                        break
-
-                if cast_default and param.default:
-                    default = f"static_cast<{type}>({param.default})"
-
-                exposed_params.append((type, name, default))
-
-            params_no_defaults = ", ".join(
-                f"{type} {name}"
-                for type, name, _, in exposed_params
-                if name is not None
-            )
-            args = ", ".join(
-                f"{name}" if name else default for _, name, default in exposed_params
-            )
-
-            with impl.indent(
-                f'.def("{camel_to_snake(method.name)}", [](MathStructure const& self, {params_no_defaults}) -> MathStructureRef {{\n'
-            ):
-                impl.write(
-                    "MathStructureRef result = MathStructureRef::construct(self);\n"
-                )
-                if method.return_type == SimpleType("bool"):
-                    impl.write(f"if(!result->{method.name}({args})) return nullptr;\n")
+        cast_default = True
+        for pattern, override in math_structure_overrides.items():
+            type_str = str(type)
+            if pattern in type_str:
+                if override[0] is None:
+                    name = None
                 else:
-                    raise RuntimeError(
-                        f"Mutating MathStructure method return type {method.return_type} handling not implemented"
-                    )
-                impl.write("return result;\n")
-            impl.write("}")
+                    type = Type.parse(type_str.replace(pattern, override[0]))
+                default = override[1]
+                cast_default = False
+                break
 
-            for type, name, default in exposed_params:
-                if name is None:
-                    continue
+        if cast_default and param.default:
+            default = f"static_cast<{type}>({param.default})"
 
-                impl.write(f', py::arg("{name}")')
-                if default is not None:
-                    impl.write(f" = {default}")
-            impl.write(")\n")
-    impl.write(";\n")
+        exposed_params.append(Parameter(type, name, default))
+
+    args = ", ".join(
+        f"{param.name}" if param.name else param.default for param in exposed_params
+    )
+
+    with MathStructure.method(
+        "QalcRef<MathStructure>",
+        camel_to_snake(method.name),
+        *(param for param in exposed_params if param.name),
+    ) as body:
+        body.write("MathStructureRef result = MathStructureRef::construct(self);\n")
+        if method.return_type == SimpleType("bool"):
+            body.write(f"if(!result->{method.name}({args})) return nullptr;\n")
+        else:
+            raise RuntimeError(
+                f"Mutating MathStructure method return type {method.return_type} handling not implemented"
+            )
+        body.write("return result;\n")
 
 math_structure_operators = [
     ("*", "__mul__"),
@@ -532,15 +514,14 @@ with header.indent("template <> struct polymorphic_type_hook<MathStructure> {\n"
 header.write("};\n}\n")
 
 options(
-    "ExpressionName",
+    classes["ExpressionName"],
     exclude={"priv"},
-    func_name="add_expression_name_auto",
     define_new_default=True,
     pass_by_type={"std::string": "std::string_view"},
 )
 
 properties_for(
-    "ExpressionItem",
+    classes["ExpressionItem"],
     renames={
         "refcount": None,
         "type": None,
@@ -548,7 +529,6 @@ properties_for(
         "id": None,
         "countNames": None,
     },
-    pybind_class="qalc_class_<ExpressionItem>",
 )
 
 BUILTIN_FUNCTION_REGEX = re.compile(
@@ -563,18 +543,16 @@ with function_declaration("void add_builtin_functions(py::module_ &m)"):
         impl.write(f'(void)qalc_class_<{name}, MathFunction>(m, "{name}");\n')
 
 properties_for(
-    "Assumptions",
+    classes["Assumptions"],
     allow_readwrite=True,
     require_getter_const=False,
-    pybind_class="pybind11::class_<class PAssumptions>",
     add_repr_from_rw=True,
 )
 
 properties_for(
-    "Unit",
+    classes["Unit"],
     allow_readwrite=True,
     add_repr_from_rw=True,
-    pybind_class="qalc_class_<Unit, ExpressionItem>",
     renames={
         "copy": None,
         "type": None,
@@ -587,6 +565,20 @@ properties_for(
     },
     extra_for_repr=["is_si", "system"],
 )
+
+add_mode = {
+    "ExpressionName",
+    "SortOptions",
+    "PrintOptions",
+    "ParseOptions",
+    "EvaluationOptions",
+}
+for pyclass in classes.values():
+    mode = "create" if pyclass.name in add_mode else "modify"
+    name = "add_" if mode == "create" else "init_"
+    name += "auto_"
+    name += pascal_to_snake(pyclass.name)
+    pyclass.write_init_function(name, header, impl, mode=mode)
 
 header.close()
 impl.close()
