@@ -194,7 +194,7 @@ def options(
     ]
 
     with pyclass.init(KW_ONLY, *parameters) as body:
-        body.write(f"{pyclass.implementation_type} result;\n")
+        body.write(f"{pyclass.implementation_name} result;\n")
         for field in options.keys():
             body.write(f"result.{field} = {field};\n")
         body.write(f"return result;\n")

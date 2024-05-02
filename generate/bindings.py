@@ -143,7 +143,7 @@ class PyClass:
         return self._underlying_struct
 
     @property
-    def implementation_type(self):
+    def implementation_name(self):
         return self._impl_type_name
 
     def init(self, *params: str | Parameter | _KwOnly) -> IndentedWriter:
