@@ -83,14 +83,18 @@ def tokenize(text: str) -> Iterable[Token]:
 
             yield Token("punct", text[:token_length])
             text = text[token_length:]
-        elif text[0] in string.digits:
-            next = find_any(text, identifier_disallowed)
-            assert all(c in string.digits for c in text[:next].rstrip("UL"))
-            yield Token("literal", text[:next])
-            text = text[next:]
         else:
             next = find_any(text, identifier_disallowed)
-            yield Token("ident", text[:next])
+            if next == -1:
+                next = len(text)
+
+            token_type = "ident"
+            if text[0] in string.digits:
+                assert all(c in string.digits for c in text[:next].rstrip("UL"))
+                token_type = "literal"
+
+            yield Token(token_type, text[:next])
+
             text = text[next:]
 
 
