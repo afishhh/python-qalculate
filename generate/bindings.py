@@ -329,7 +329,11 @@ class PyClass:
             while isinstance(type, PointerType):
                 type = type.inner
             assert isinstance(type, SimpleType)
-            if type.name.endswith("int"):
+            # Take types out of pointer wrappers
+            if type.targs:
+                type = type.targs[0]
+                assert isinstance(type, SimpleType)
+            if type.name.endswith("int") or type.name in ("size_t"):
                 return "int"
             if type.name in ("std::string", "std::string_view"):
                 return "str"
@@ -362,8 +366,10 @@ class PyClass:
 
         for method in self._methods:
             types.write(f"def {method.name}(")
+            if method.receiver:
+                types.write("self")
             for parameter in method.parameters:
-                if parameter is not method.parameters[0]:
+                if method.receiver or parameter is not method.parameters[0]:
                     types.write(", ")
                 if isinstance(parameter, _KwOnly):
                     types.write("*")
