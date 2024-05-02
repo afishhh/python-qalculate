@@ -43,6 +43,7 @@ class OutputDirectory:
         new_hash = self._hash(content)
         if self._index.get(index_key, None) != new_hash:
             self._index[index_key] = new_hash
+            path.parent.mkdir(exist_ok=True)
             path.write_text(content)
         else:
             print(f"skipped writing unchanged path {path.relative_to(self._path)}")

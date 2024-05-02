@@ -25,11 +25,20 @@ types_output = (
 )
 qalculate_sources = ParsedSourceFiles(libqalculate_src.glob("*.h"))
 
+
+def prepare_impl_file(text: TextIO, includes: list[str] = []) -> IndentedWriter:
+    writer = IndentedWriter(text)
+    includes += ["<pybind11/pybind11.h>", "<libqalculate/qalculate.h>"]
+    for include in includes:
+        writer.write(f"#include {include}\n")
+    return writer
+
+
 MATH_STRUCTURE_CLASS = "qalc_class_<MathStructure>"
 
 header = IndentedWriter(output_directory.writer("generated.hh"))
 impl = IndentedWriter(output_directory.writer("generated.cc"))
-typings = IndentedWriter(StringIO())
+typings = prepare_impl_file(StringIO())
 
 typings.write("import typing\n")
 
@@ -63,6 +72,8 @@ classes = {
     ),
 }
 
+class_extra_impl: dict[PyClass, str] = {}
+
 for simple_class in ("Number", "SortOptions", "PrintOptions", "ParseOptions"):
     classes[simple_class] = PyClass(simple_class, sources=qalculate_sources)
 
@@ -81,7 +92,7 @@ impl.write('#include "generated.hh"\n\n')
 
 
 @contextmanager
-def function_declaration(signature: str):
+def function_declaration(signature: str, impl=impl):
     header.write(f"{signature};\n")
     impl.write(f"{signature} {{\n")
     impl.indent()
@@ -168,8 +179,9 @@ def options(
     defaults_name = f"global_{pascal_to_snake(pyclass.name)}"
 
     if define_new_default:
+        class_extra_impl.setdefault(pyclass, "")
         defaults_name = f"_autogen_{pascal_to_snake(pyclass.name)}_defaults"
-        impl.write(f"{pyclass.name} {defaults_name};\n")
+        class_extra_impl[pyclass] += f"{pyclass.name} {defaults_name};\n"
 
     options = {}
     for field in pyclass.underlying_type.fields.values():
@@ -213,7 +225,7 @@ def options(
 enums: list[str] = []
 
 
-def enum(name: str, prefix: str | None = None):
+def enum(name: str, prefix: str | None = None, writer: IndentedWriter = impl):
     enums.append(name)
     enum = qalculate_sources.enum(name)
     if prefix is None:
@@ -222,17 +234,18 @@ def enum(name: str, prefix: str | None = None):
     typings.indent(f"class {name}:\n")
 
     with function_declaration(
-        f"pybind11::enum_<{name}> add_{pascal_to_snake(name)}_enum(pybind11::module_ &m)"
+        f"pybind11::enum_<{name}> add_{pascal_to_snake(name)}_enum(pybind11::module_ &m)",
+        impl=writer,
     ):
-        with impl.indent(f'return pybind11::enum_<{name}>(m, "{name}")\n'):
+        with writer.indent(f'return pybind11::enum_<{name}>(m, "{name}")\n'):
             for variant in enum.members:
                 docarg = (
                     f", {cpp_string(variant.docstring)}" if variant.docstring else ""
                 )
                 pyvariant = variant.name.removeprefix(prefix)
-                impl.write(f'.value("{pyvariant}", {name}::{variant.name}{docarg})\n')
+                writer.write(f'.value("{pyvariant}", {name}::{variant.name}{docarg})\n')
                 typings.write(f"{pyvariant}: typing.ClassVar[{name}]\n")
-        impl.write(";\n")
+        writer.write(";\n")
 
     typings.write(f"__members__: typing.ClassVar[dict[str, {name}]]\n")
 
@@ -263,41 +276,43 @@ def enum(name: str, prefix: str | None = None):
     typings.dedent()
 
 
-enum("ApproximationMode", "APPROXIMATION_")
-enum("NumberFractionFormat", "FRACTION_")
-enum("StructuringMode", "STRUCTURING_")
-enum("AutoPostConversion", "POST_CONVERSION_")
-enum("ComparisonType", "COMPARISON_")
-enum("RoundingMode", "ROUNDING_")
-enum("MessageType", "MESSAGE_")
-for name in (
-    "MultiplicationSign",
-    "DivisionSign",
-    "BaseDisplay",
-    "DigitGrouping",
-    "TimeZone",
-    "ExpDisplay",
-    "ReadPrecisionMode",
-    "AngleUnit",
-    "IntervalCalculation",
-    "ComplexNumberForm",
-    "MixedUnitsConversion",
-    "ParsingMode",
-    "DateTimeFormat",
-    "IntervalDisplay",
-    "ComparisonResult",
-    "AssumptionType",
-    "AssumptionSign",
-):
-    enum(name)
-enum("AutomaticFractionFormat", "AUTOMATIC_FRACTION_")
-enum("AutomaticApproximation", "AUTOMATIC_APPROXIMATION_")
+with output_directory.writer("enums.cc") as writer:
+    writer = prepare_impl_file(writer)
+    enum("ApproximationMode", "APPROXIMATION_", writer)
+    enum("NumberFractionFormat", "FRACTION_", writer)
+    enum("StructuringMode", "STRUCTURING_", writer)
+    enum("AutoPostConversion", "POST_CONVERSION_", writer)
+    enum("ComparisonType", "COMPARISON_", writer)
+    enum("RoundingMode", "ROUNDING_", writer)
+    enum("MessageType", "MESSAGE_", writer)
+    enum("AutomaticFractionFormat", "AUTOMATIC_FRACTION_", writer)
+    enum("AutomaticApproximation", "AUTOMATIC_APPROXIMATION_", writer)
+    for name in (
+        "MultiplicationSign",
+        "DivisionSign",
+        "BaseDisplay",
+        "DigitGrouping",
+        "TimeZone",
+        "ExpDisplay",
+        "ReadPrecisionMode",
+        "AngleUnit",
+        "IntervalCalculation",
+        "ComplexNumberForm",
+        "MixedUnitsConversion",
+        "ParsingMode",
+        "DateTimeFormat",
+        "IntervalDisplay",
+        "ComparisonResult",
+        "AssumptionType",
+        "AssumptionSign",
+    ):
+        enum(name, writer=writer)
 
-# This one is initialized manually (to add helper properties)
-enums.remove("ComparisonResult")
-with function_declaration("void add_all_enums(pybind11::module_ &m)"):
-    for enm in enums:
-        impl.write(f"add_{pascal_to_snake(enm)}_enum(m);\n")
+    # This one is initialized manually (to add helper properties)
+    enums.remove("ComparisonResult")
+    with function_declaration("void add_all_enums(pybind11::module_ &m)", impl=writer):
+        for enm in enums:
+            writer.write(f"add_{pascal_to_snake(enm)}_enum(m);\n")
 
 impl.write('#include "wrappers.hh"\n')
 impl.write('#include "options.hh"\n')
@@ -436,13 +451,13 @@ for method in MathStructure.underlying_type.methods.values():
         default = param.default
 
         cast_default = True
-        for pattern, override in math_structure_overrides.items():
+        for patterns, override in math_structure_overrides.items():
             type_str = str(type)
-            if pattern in type_str:
+            if patterns in type_str:
                 if override[0] is None:
                     name = None
                 else:
-                    type = Type.parse(type_str.replace(pattern, override[0]))
+                    type = Type.parse(type_str.replace(patterns, override[0]))
                 default = override[1]
                 cast_default = False
                 break
@@ -618,6 +633,15 @@ properties_for(
     extra_for_repr=["is_si", "system"],
 )
 
+extra_includes: list[tuple[Iterable[str], list[str]]] = [
+    ("Options", ['"options.hh"']),
+    ("Assumptions", ['"wrappers.hh"']),
+    (
+        ("MathStructure", "MathFunction", "Unit", "ExpressionItem"),
+        ['"ref.hh"', '"options.hh"'],
+    ),
+]
+
 add_mode = {
     "ExpressionName",
     "SortOptions",
@@ -634,7 +658,29 @@ for pyclass in classes.values():
         name = "add_" if mode == "create" else "init_"
         name += "auto_"
         name += pascal_to_snake(pyclass.name)
-        pyclass.write_init_function(name, header, impl, mode=mode)
+        with output_directory.writer(f"classes/{pyclass.name}.cc") as file:
+            includes = []
+            for patterns, extra in extra_includes:
+                if isinstance(patterns, str):
+                    patterns = [patterns]
+                if any(True for pattern in patterns if pattern in pyclass.name):
+                    includes += extra
+
+            writer = prepare_impl_file(
+                file,
+                includes,
+            )
+
+            if pyclass in class_extra_impl:
+                writer.write(class_extra_impl[pyclass])
+
+            pyclass.write_init_function(
+                name,
+                header,
+                writer,
+                mode=mode,
+            )
+
     pyclass.write_types(typings)
 
 with function_declaration("void add_builtin_functions(pybind11::module_ &m)"):
