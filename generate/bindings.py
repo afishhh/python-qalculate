@@ -2,7 +2,14 @@ from dataclasses import dataclass
 from io import StringIO
 from typing import Literal, overload
 
-from generate.parsing import Parameter, ParsedSource, Struct, Type
+from generate.parsing import (
+    Parameter,
+    ParsedSource,
+    PointerType,
+    SimpleType,
+    Struct,
+    Type,
+)
 from generate.utils import IndentedWriter, cpp_string
 
 
@@ -78,6 +85,7 @@ class PyProperty:
 
 @dataclass
 class _Field:
+    type: Type
     name: str
     cpp_name: str
     docstring: str
@@ -188,13 +196,16 @@ class PyClass:
 
     def field(
         self,
+        type: Type,
         name: str,
         cpp_name: str,
         *,
         mode: Literal["readonly", "readwrite"] = "readonly",
         docstring: str = "",
     ):
-        self._fields.append(_Field(name, cpp_name, docstring, mode == "readwrite"))
+        self._fields.append(
+            _Field(type, name, cpp_name, docstring, mode == "readwrite")
+        )
 
     def write_init_function(
         self,
@@ -311,4 +322,58 @@ class PyClass:
         impl.dedent()
         impl.dedent("}\n")
 
-    # def write_types(self, types: IndentedWriter):
+    def write_types(self, types: IndentedWriter):
+        types.indent(f"class {self.name}:\n")
+
+        def pythonize_type(type: Type) -> str:
+            while isinstance(type, PointerType):
+                type = type.inner
+            assert isinstance(type, SimpleType)
+            if type.name.endswith("int"):
+                return "int"
+            if type.name in ("std::string", "std::string_view"):
+                return "str"
+            if type.name == "bool":
+                return "bool"
+            if type.name in ("float", "double"):
+                return "float"
+            if type.name == "void":
+                return "None"
+            return repr(type.name)
+
+        for field in self._fields:
+            types.write("@property\n")
+            return_type = pythonize_type(field.type)
+            with types.indent(f"def {field.name}(self) -> {return_type}:\n"):
+                if field.docstring:
+                    types.write(f'"""{repr(field.docstring)[1:-1]}"""\n')
+                types.write("...\n")
+            types.write("\n")
+
+        for prop in self._properties:
+            types.write("@property\n")
+            assert prop._getter
+            return_type = pythonize_type(prop._getter[1])
+            with types.indent(f"def {prop._name}(self) -> {return_type}:\n"):
+                if prop._docstring:
+                    types.write(f'"""{repr(prop._docstring)[1:-1]}"""\n')
+                types.write("...\n")
+            types.write("\n")
+
+        for method in self._methods:
+            types.write(f"def {method.name}(")
+            for parameter in method.parameters:
+                if parameter is not method.parameters[0]:
+                    types.write(", ")
+                if isinstance(parameter, _KwOnly):
+                    types.write("*")
+                else:
+                    types.write(f"{parameter.name}: {pythonize_type(parameter.type)}")
+                    if parameter.default:
+                        types.write(" = ...")
+            types.write(")")
+            if method.name != "__init__":
+                types.write(f" -> {pythonize_type(method.return_type)}")
+            types.write(": ...\n\n")
+
+        types.dedent()

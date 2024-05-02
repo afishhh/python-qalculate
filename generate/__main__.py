@@ -24,6 +24,7 @@ MATH_STRUCTURE_CLASS = "qalc_class_<MathStructure>"
 output_directory.mkdir(exist_ok=True)
 header = IndentedWriter((output_directory / "generated.hh").open("w+"))
 impl = IndentedWriter((output_directory / "generated.cc").open("w+"))
+typings = IndentedWriter((output_directory / "types.pyi").open("w+"))
 
 classes = {
     "MathStructure": PyClass(
@@ -163,6 +164,7 @@ def options(
             continue
 
         pyclass.field(
+            field.type,
             camel_to_snake(field.name),
             field.name,
             mode="readwrite",
@@ -579,6 +581,7 @@ for pyclass in classes.values():
     name += "auto_"
     name += pascal_to_snake(pyclass.name)
     pyclass.write_init_function(name, header, impl, mode=mode)
+    pyclass.write_types(typings)
 
 header.close()
 impl.close()
