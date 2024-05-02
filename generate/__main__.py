@@ -26,6 +26,8 @@ header = IndentedWriter((output_directory / "generated.hh").open("w+"))
 impl = IndentedWriter((output_directory / "generated.cc").open("w+"))
 typings = IndentedWriter((output_directory / "types.pyi").open("w+"))
 
+typings.write("import typing\n")
+
 classes = {
     "MathStructure": PyClass(
         "MathStructure", extra=["QalcRef<MathStructure>"], sources=qalculate_sources
@@ -203,6 +205,8 @@ def enum(name: str, prefix: str | None = None):
     if prefix is None:
         prefix = f"{pascal_to_snake(name).upper()}_"
 
+    typings.indent(f"class {name}:\n")
+
     with function_declaration(
         f"pybind11::enum_<{name}> add_{pascal_to_snake(name)}_enum(pybind11::module_ &m)"
     ):
@@ -211,10 +215,38 @@ def enum(name: str, prefix: str | None = None):
                 docarg = (
                     f", {cpp_string(variant.docstring)}" if variant.docstring else ""
                 )
-                impl.write(
-                    f'.value("{variant.name.removeprefix(prefix)}", {name}::{variant.name}{docarg})\n'
-                )
+                pyvariant = variant.name.removeprefix(prefix)
+                impl.write(f'.value("{pyvariant}", {name}::{variant.name}{docarg})\n')
+                typings.write(f"{pyvariant}: typing.ClassVar[{name}]\n")
         impl.write(";\n")
+
+    typings.write(f"__members__: typing.ClassVar[dict[str, {name}]]\n")
+
+    # TODO: Generate these members for enums (pybind11-stubgen does)
+    # def __eq__(self, other: typing.Any) -> bool:
+    #     ...
+    # def __getstate__(self) -> int:
+    #     ...
+    # def __hash__(self) -> int:
+    #     ...
+    # def __index__(self) -> int:
+    #     ...
+    # def __init__(self, value: int) -> None:
+    #     ...
+    # def __int__(self) -> int:
+    #     ...
+    # def __ne__(self, other: typing.Any) -> bool:
+    #     ...
+    # def __setstate__(self, state: int) -> None:
+    #     ...
+
+    typings.write(f"@property\n")
+    typings.write(f"def name(self) -> str: ...\n")
+    typings.write(f"@property\n")
+    typings.write(f"def value(self) -> int: ...\n")
+    typings.write(f"def __str__(self) -> str: ...\n")
+    typings.write(f"def __repr__(self) -> str: ...\n")
+    typings.dedent()
 
 
 enum("ApproximationMode", "APPROXIMATION_")
