@@ -1,5 +1,4 @@
 import ast
-from os import walk
 from pathlib import Path
 
 
@@ -32,7 +31,17 @@ def merge_typing_files(lower: Path | str, upper: Path | str) -> str:
     for stmt in upper_module.body:
         if isinstance(stmt, ast.ClassDef):
             if stmt.name in lower_classes:
-                lower_classes[stmt.name].body += stmt.body
+                lower_class = lower_classes[stmt.name]
+                lower_class.body += stmt.body
+                lower_base_names =  {
+                    base.id
+                    for base in lower_class.bases
+                    if isinstance(base, ast.Name)
+                }
+                for base in stmt.bases:
+                    assert isinstance(base, ast.Name)
+                    if base not in lower_base_names:
+                        lower_class.bases.append(base)
             else:
                 new_body.append(stmt)
         elif isinstance(stmt, ast.Import):
