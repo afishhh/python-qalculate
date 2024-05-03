@@ -4,7 +4,7 @@ import re
 from contextlib import contextmanager
 import sys
 
-from generate.bindings import KW_ONLY, PyClass
+from generate.bindings import KW_ONLY, PyClass, PyContext
 from generate.merge_types import merge_typing_files
 from generate.output import OutputDirectory
 
@@ -42,40 +42,27 @@ typings = prepare_impl_file(StringIO())
 
 typings.write("import typing\n")
 
-classes = {
-    "MathStructure": PyClass(
-        "MathStructure", extra=["QalcRef<MathStructure>"], sources=qalculate_sources
-    ),
-    "ExpressionItem": PyClass(
-        "ExpressionItem", extra=["QalcRef<ExpressionItem>"], sources=qalculate_sources
-    ),
-    "ExpressionName": PyClass("ExpressionName", sources=qalculate_sources),
-    "Assumptions": PyClass(
-        "Assumptions", wrapper="class PAssumptions", sources=qalculate_sources
-    ),
-    "Unit": PyClass(
-        "Unit",
-        extra=["QalcRef<Unit>"],
-        bases=["ExpressionItem"],
-        sources=qalculate_sources,
-    ),
-    "EvaluationOptions": PyClass(
-        "EvaluationOptions",
-        wrapper="class PEvaluationOptions",
-        sources=qalculate_sources,
-    ),
-    "MathFunction": PyClass(
-        "MathFunction",
-        extra=["QalcRef<MathFunction>"],
-        bases=["ExpressionItem"],
-        sources=qalculate_sources,
-    ),
-}
+classes = PyContext(qalculate_sources)
+classes.add("MathStructure", holder="QalcRef<MathStructure>")
+classes.add("ExpressionItem", holder="QalcRef<ExpressionItem>")
+classes.add("Assumptions", wrapper="class PAssumptions")
+classes.add("ExpressionName")
+classes.add("Unit", holder="QalcRef<Unit>", bases=["ExpressionItem"])
+classes.add(
+    "EvaluationOptions",
+    wrapper="class PEvaluationOptions",
+)
+classes.add(
+    "MathFunction",
+    holder="QalcRef<MathFunction>",
+    bases=["ExpressionItem"],
+)
+classes.add("Number")
+classes.add("SortOptions")
+classes.add("PrintOptions")
+classes.add("ParseOptions")
 
 class_extra_impl: dict[PyClass, str] = {}
-
-for simple_class in ("Number", "SortOptions", "PrintOptions", "ParseOptions"):
-    classes[simple_class] = PyClass(simple_class, sources=qalculate_sources)
 
 header.write(
     """
@@ -227,6 +214,7 @@ enums: list[str] = []
 
 def enum(name: str, prefix: str | None = None, writer: IndentedWriter = impl):
     enums.append(name)
+    classes.add_foreign(name, name)
     enum = qalculate_sources.enum(name)
     if prefix is None:
         prefix = f"{pascal_to_snake(name).upper()}_"
@@ -602,11 +590,10 @@ for match in BUILTIN_FUNCTION_REGEX.finditer(
     qalculate_sources.get("BuiltinFunctions.h").text
 ):
     name, id = match.groups()
-    classes[name] = PyClass(
+    classes.add(
         name,
-        extra=[f"QalcRef<{name}>"],
+        holder=f"QalcRef<{name}>",
         bases=["MathFunction"],
-        sources=qalculate_sources,
     )
 
 properties_for(
@@ -650,7 +637,7 @@ add_mode = {
     "EvaluationOptions",
 }
 builtin_function_classes: list[PyClass] = []
-for pyclass in classes.values():
+for pyclass in classes:
     if pyclass.name.endswith("Function") and pyclass.name != "MathFunction":
         builtin_function_classes.append(pyclass)
     else:
@@ -681,7 +668,7 @@ for pyclass in classes.values():
                 mode=mode,
             )
 
-    pyclass.write_types(typings)
+    pyclass.write_types(typings, classes)
 
 with function_declaration("void add_builtin_functions(pybind11::module_ &m)"):
     for pyclass in builtin_function_classes:

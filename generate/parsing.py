@@ -3,7 +3,7 @@ import enum
 from pathlib import Path
 import re
 import string
-from typing import Callable, Iterable, Literal, Sequence
+from typing import Callable, Iterable, Literal, Sequence, TypeVar
 from dataclasses import dataclass, field
 
 from .token import (
@@ -78,6 +78,8 @@ def _parse_method(
     return fun
 
 
+TType = TypeVar("TType", bound="Type")
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Type(ABC):
     const: bool = False
@@ -90,11 +92,18 @@ class Type(ABC):
         tokens._inner = iter(remaining)
         return type
 
+    def remove_cv(self: TType) -> "TType":
+        return self.__class__(
+            **{slot: getattr(self, slot) for slot in self.__slots__},
+            const=False,
+            volatile=False,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class SimpleType(Type):
     name: str
-    targs: list[Type] | None = field(default=None)
+    targs: tuple[Type, ...] | None = field(default=None)
 
     def __str__(self) -> str:
         result = self.name
@@ -245,7 +254,12 @@ def take_simple_type(it: PeekableIterator[Token]) -> Type:
     except StopIteration:
         pass
 
-    return SimpleType(const=const, volatile=volatile, name=result, targs=targs)
+    return SimpleType(
+        const=const,
+        volatile=volatile,
+        name=result,
+        targs=tuple(targs) if targs is not None else None,
+    )
 
 
 # TODO: Handle function pointers

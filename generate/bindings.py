@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from io import StringIO
-from typing import Literal, overload
+from typing import Iterator, Literal, ParamSpec, overload
 
 from generate.parsing import (
     Parameter,
@@ -99,7 +99,7 @@ class PyClass:
         *,
         wrapper: str | None = None,
         bound_type: Struct | str | None = None,
-        extra: list[str] = [],
+        holder: str | None = None,
         bases: list[str] = [],
         sources: ParsedSource | None = None,
     ) -> None:
@@ -117,10 +117,11 @@ class PyClass:
             except KeyError:
                 self._underlying_struct = None
         self._impl_type_name = wrapper or bound_type
+        self._holder = holder
         self._bound_type = bound_type
         self._pyclass = f"pybind11::class_<{wrapper or bound_type}"
-        for extra_arg in extra:
-            self._pyclass += f", {extra_arg}"
+        if holder:
+            self._pyclass += f", {holder}"
         for base in bases:
             self._pyclass += f", {base}"
         self._pyclass += ">"
@@ -342,7 +343,7 @@ class PyClass:
 
         impl.dedent("}\n")
 
-    def write_types(self, types: IndentedWriter):
+    def write_types(self, types: IndentedWriter, context: "PyContext"):
         types.write(f"class {self.name}(")
         for base in self._bases:
             types.write(base)
@@ -351,26 +352,6 @@ class PyClass:
         if not self._fields and not self._methods and not self._properties:
             types.write("pass\n")
 
-        def pythonize_type(type: Type) -> str:
-            while isinstance(type, PointerType):
-                type = type.inner
-            assert isinstance(type, SimpleType)
-            # Take types out of pointer wrappers
-            if type.targs:
-                type = type.targs[0]
-                assert isinstance(type, SimpleType)
-            if type.name.endswith("int") or type.name in ("size_t"):
-                return "int"
-            if type.name in ("std::string", "std::string_view"):
-                return "str"
-            if type.name == "bool":
-                return "bool"
-            if type.name in ("float", "double"):
-                return "float"
-            if type.name == "void":
-                return "None"
-            return repr(type.name)
-
         prop_like: list[tuple[str, Type, bool, str]] = []
 
         for field in self._fields:
@@ -378,11 +359,13 @@ class PyClass:
 
         for prop in self._properties:
             assert prop._getter
-            prop_like.append((prop._name, prop._getter[1], prop._setter is not None, prop._docstring))
+            prop_like.append(
+                (prop._name, prop._getter[1], prop._setter is not None, prop._docstring)
+            )
 
-        for name, type, writeable, docstring in prop_like:
+        for name, python_type, writeable, docstring in prop_like:
             types.write("@property\n")
-            return_type = pythonize_type(type)
+            return_type = context.pythonize_cpp_type(python_type)
             with types.indent(f"def {name}(self) -> {return_type}:\n"):
                 if docstring:
                     types.write(f'"""{repr(docstring)[1:-1]}"""\n')
@@ -406,12 +389,87 @@ class PyClass:
                 if isinstance(parameter, _KwOnly):
                     types.write("*")
                 else:
-                    types.write(f"{parameter.name}: {pythonize_type(parameter.type)}")
+                    python_type = context.pythonize_cpp_type(parameter.type)
+                    types.write(f"{parameter.name}: {python_type}")
                     if parameter.default:
                         types.write(" = ...")
             types.write(")")
             if method.name != "__init__":
-                types.write(f" -> {pythonize_type(method.return_type)}")
+                types.write(f" -> {context.pythonize_cpp_type(method.return_type)}")
             types.write(": ...\n\n")
 
         types.dedent()
+
+
+_BUILTIN_CPP2PYTHON = {
+    "std::string": "str",
+    "std::string_view": "str",
+    "size_t": "int",
+    "ssize_t": "int",
+    "bool": "bool",
+    "float": "float",
+    "double": "double",
+    "void": "None",
+}
+
+
+class PyContext:
+    def __init__(self, cpp_sources: ParsedSource) -> None:
+        self._cpp_source = cpp_sources
+        self._classes: dict[str, PyClass] = {}
+        self._cpp_to_class: dict[Type, str] = {}
+
+    def add(
+        self,
+        name: str,
+        *,
+        wrapper: str | None = None,
+        bound_type: Struct | str | None = None,
+        holder: str | None = None,
+        bases: list[str] = [],
+    ) -> PyClass:
+        pyclass = PyClass(
+            name,
+            wrapper=wrapper,
+            bound_type=bound_type,
+            holder=holder,
+            bases=bases,
+            sources=self._cpp_source,
+        )
+
+        if holder:
+            self._cpp_to_class[Type.parse(holder)] = name
+        self._cpp_to_class[SimpleType(pyclass.underlying_name)] = name
+        if pyclass.implementation_name != pyclass.underlying_name:
+            self._cpp_to_class[
+                SimpleType(pyclass.implementation_name.removeprefix("class "))
+            ] = name
+
+        self._classes[pyclass.name] = pyclass
+        return pyclass
+
+    def add_foreign(self, cpp_name: str | Type, python_name: str):
+        if isinstance(cpp_name, str):
+            cpp_name = Type.parse(cpp_name)
+
+        self._cpp_to_class[cpp_name] = python_name
+
+    def __getitem__(self, name: str) -> PyClass:
+        return self._classes[name]
+
+    def __iter__(self) -> Iterator[PyClass]:
+        return iter(self._classes.values())
+
+    def pythonize_cpp_type(self, type: Type) -> str:
+        while isinstance(type, PointerType):
+            type = type.inner
+        assert isinstance(type, SimpleType)
+        type = type.remove_cv()
+
+        if not type.targs:
+            if type.name.endswith("int"):
+                return "int"
+            if (py := _BUILTIN_CPP2PYTHON.get(type.name, None)):
+                return py
+
+        return self._cpp_to_class[type]
