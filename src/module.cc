@@ -147,7 +147,7 @@ PYBIND11_MODULE(qalculate, m) {
 
   repr_print_options.use_unicode_signs = UNICODE_SIGNS_WITHOUT_EXPONENTS;
 
-  auto number = add_number_operators(init_auto_number(
+  auto number = init_auto_number(
       py::class_<Number>(m, "Number")
           .def(py::init<>())
           .def(py::init(&number_from_python_int))
@@ -221,14 +221,14 @@ PYBIND11_MODULE(qalculate, m) {
           .def(py::self < py::self)
           .def(py::self <= py::self)
           .def(py::self > py::self)
-          .def(py::self >= py::self)));
+          .def(py::self >= py::self));
 
   py::implicitly_convertible<long double, Number>();
   py::implicitly_convertible<py::int_, Number>();
 
   // FIXME: Clean this up finally...
   add_math_structure_proxies(init_math_structure_children(
-      m, add_math_structure_operators(init_auto_math_structure(
+      m, init_auto_math_structure(
              qalc_class_<MathStructure>(m, "MathStructure", py::is_final{})
                  .def("compare", &MathStructure::compare)
                  .def("compare_approximately",
@@ -251,7 +251,7 @@ PYBIND11_MODULE(qalculate, m) {
                        // Compare infinities as equal by default
                        return self.equals(other, false, true);
                      },
-                     py::is_operator{})))));
+                     py::is_operator{}))));
 
   number.def(py::init([](MathStructureNumberProxy const &structure) {
     return structure.number();
