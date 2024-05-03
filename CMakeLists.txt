@@ -6,6 +6,7 @@ project(
 )
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/BuildWheel.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Qalculate.cmake")
 
 find_package(
 	Python 3.6
@@ -13,47 +14,10 @@ find_package(
 	REQUIRED
 )
 find_package(pybind11 CONFIG REQUIRED)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(LIBQALCULATE REQUIRED libqalculate)
 
 file(GLOB GENERATOR_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/generate/*.py")
 list(APPEND GENERATOR_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/types.pyi")
 set(GENERATED_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
-
-set(
-	LIBQALCULATE_SOURCE_PATH "$ENV{LIBQALCULATE_SOURCE_PATH}"
-	CACHE STRING "The libqalculate source path to use for generating bindings."
-)
-
-if(LIBQALCULATE_SOURCE_PATH)
-	if(NOT IS_ABSOLUTE "${LIBQALCULATE_SOURCE_PATH}")
-		message(FATAL_ERROR "LIBQALCULATE_SOURCE_PATH is not an absolute path")
-	elseif(NOT EXISTS "${LIBQALCULATE_SOURCE_PATH}")
-		message(FATAL_ERROR "LIBQALCULATE_SOURCE_PATH does not exist")
-	endif()
-	set(LIBQALCULATE_RESOLVED_PATH "${LIBQALCULATE_SOURCE_PATH}")
-else()
-	set(LIBQALCULATE_CLONE_PATH "${CMAKE_CURRENT_BINARY_DIR}/libqalculate-src")
-	if(NOT EXISTS "${LIBQALCULATE_CLONE_PATH}")
-		find_package(Git)
-		if(NOT "${GIT_FOUND}")
-			message(
-				FATAL_ERROR
-				"LIBQALCULATE_SOURCE_PATH not set and git not found\n"
-				"Install git or set an explicit path to qalculate sources"
-			)
-		endif()
-		execute_process(
-			COMMAND
-				"${GIT_EXECUTABLE}" "clone"
-				"-b" "v${LIBQALCULATE_VERSION}"
-				"--depth" "1"
-				"https://github.com/Qalculate/libqalculate.git" "${LIBQALCULATE_CLONE_PATH}"
-			COMMAND_ERROR_IS_FATAL ANY
-		)
-	endif()
-	set(LIBQALCULATE_RESOLVED_PATH "${LIBQALCULATE_CLONE_PATH}")
-endif()
 
 set(REGENERATE OFF)
 foreach(SOURCE_FILE ${GENERATOR_SOURCES})
@@ -95,7 +59,7 @@ target_compile_options(
 target_link_libraries(
 	python-qalculate
 	PRIVATE
-	"${LIBQALCULATE_LIBRARIES}"
+	libqalculate
 )
 
 target_include_directories(
