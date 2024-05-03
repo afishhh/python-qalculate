@@ -388,12 +388,23 @@ class PyClass:
 
             if writeable:
                 types.write(f"@{name}.setter\n")
-                with types.indent(f"def {name}(self, value: {return_type}) -> None:\n"):
+                param_type = context.apply_implicit_casts(return_type)
+                with types.indent(f"def {name}(self, value: {param_type}) -> None:\n"):
                     types.write("...\n")
 
             types.write("\n")
 
+        seen_once = set()
+        overloaded = set()
         for method in self._methods:
+            if method.name in seen_once:
+                overloaded.add(method.name)
+            else:
+                seen_once.add(method.name)
+
+        for method in self._methods:
+            if method.name in overloaded:
+                types.write("@overload\n")
             types.write(f"def {method.name}(")
             has_self = method.receiver or method.name == "__init__"
             if has_self:
@@ -405,6 +416,7 @@ class PyClass:
                     types.write("*")
                 else:
                     python_type = context.pythonize_cpp_type(parameter.type)
+                    python_type = context.apply_implicit_casts(python_type)
                     types.write(f"{parameter.name}: {python_type}")
                     if parameter.default:
                         types.write(" = ...")
@@ -433,6 +445,8 @@ class PyContext:
         self._cpp_source = cpp_sources
         self._classes: dict[str, PyClass] = {}
         self._cpp_to_class: dict[Type, str] = {}
+        # NOTE: This dictionary is in reverse, it maps a type to all known types that can be implicitly cast to that type.
+        self._implicit_casts: dict[str, list[str]] = {}
 
     def add(
         self,
@@ -463,6 +477,9 @@ class PyContext:
         self._classes[pyclass.name] = pyclass
         return pyclass
 
+    def add_implcit_cast(self, src: str, dst: str):
+        self._implicit_casts.setdefault(dst, []).append(src)
+
     def add_foreign(self, cpp_name: str | Type, python_name: str):
         if isinstance(cpp_name, str):
             cpp_name = Type.parse(cpp_name)
@@ -488,3 +505,6 @@ class PyContext:
                 return py
 
         return self._cpp_to_class[type]
+
+    def apply_implicit_casts(self, type: str) -> str:
+        return " | ".join(self._implicit_casts.get(type, []) + [type])

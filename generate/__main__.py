@@ -41,6 +41,7 @@ impl = IndentedWriter(output_directory.writer("generated.cc"))
 typings = prepare_impl_file(StringIO())
 
 typings.write("import typing\n")
+typings.write("from typing import overload\n")
 
 classes = PyContext(qalculate_sources)
 MathStructure = classes.add("MathStructure", holder="QalcRef<MathStructure>")
@@ -63,6 +64,8 @@ classes.add("PrintOptions")
 classes.add("ParseOptions")
 
 classes.add_foreign("MathStructureRef", "MathStructure")
+classes.add_implcit_cast("int", "Number")
+classes.add_implcit_cast("float", "Number")
 
 class_extra_impl: dict[PyClass, str] = {}
 
@@ -339,19 +342,27 @@ properties_for(
 )
 
 number_operators = [
-    ("multiply", "__mul__"),
-    ("divide", "__truediv__"),
-    ("add", "__add__"),
-    ("subtract", "__sub__"),
-    ("bitXor", "__xor__"),
+    ("Number", "multiply", "__mul__"),
+    ("Number", "divide", "__truediv__"),
+    ("Number", "add", "__add__"),
+    ("Number", "subtract", "__sub__"),
+    ("Number", "bitXor", "__xor__"),
+    ("bool", "isLessThan", "__lt__"),
+    ("bool", "isLessThanOrEqualTo", "__le__"),
+    ("bool", "isGreaterThan", "__gt__"),
+    ("bool", "isGreaterThanOrEqualTo", "__ge__"),
+    ("Number", "raise", "__pow__"),
 ]
 
-for cpp_function, py_op in number_operators:
-    with Number.method(Number, py_op, "Number const& other", operator=True) as body:
-        body.write(f"Number result = self;\n")
-        with body.indent(f"if(!result.{cpp_function}(other))\n"):
-            body.write(f'throw pybind11::value_error("Operation failed");\n')
-        body.write("return result;\n")
+for ret, cpp_function, py_op in number_operators:
+    with Number.method(ret, py_op, "Number const& other", operator=True) as body:
+        if ret == "Number":
+            body.write(f"Number result = self;\n")
+            with body.indent(f"if(!result.{cpp_function}(other))\n"):
+                body.write(f'throw pybind11::value_error("Operation failed");\n')
+            body.write("return result;\n")
+        else:
+            body.write(f"return self.{cpp_function}(other);\n")
 
 
 math_structure_operators = [
@@ -363,7 +374,7 @@ math_structure_operators = [
 ]
 
 for cpp_op, py_op in math_structure_operators:
-    for other_type in ["MathStructure const&", "Number const&", "std::string"]:
+    for other_type in ["MathStructure const&", "Number const&"]:
         with MathStructure.method(
             "MathStructureRef", py_op, f"{other_type} other", operator=True
         ) as body:
