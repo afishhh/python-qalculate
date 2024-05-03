@@ -9,7 +9,8 @@ set(
 
 if(USE_SYSTEM_LIBQALCULATE)
 	find_package(PkgConfig REQUIRED)
-	pkg_check_modules(LIBQALCULATE REQUIRED libqalculate)
+	pkg_check_modules(LIBQALCULATE REQUIRED IMPORTED_TARGET libqalculate)
+	add_library(libqalculate ALIAS PkgConfig::LIBQALCULATE)
 
 	if(NOT LIBQALCULATE_FOUND)
 		message(
