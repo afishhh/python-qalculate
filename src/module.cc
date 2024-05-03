@@ -1,7 +1,9 @@
 #include <cassert>
+#include <complex>
 #include <libqalculate/qalculate.h>
 #include <pybind11/attr.h>
 #include <pybind11/cast.h>
+#include <pybind11/complex.h>
 #include <pybind11/gil.h>
 #include <pybind11/operators.h>
 #include <pybind11/pybind11.h>
@@ -46,6 +48,12 @@ Number number_from_python_int(py::int_ value) {
     throw py::error_already_set();
   else
     return long_value;
+}
+
+Number number_from_complex(std::complex<long double> complex) {
+  Number result(complex.real());
+  result.setImaginaryPart(complex.imag());
+  return result;
 }
 
 py::int_ assert_and_steal_int(PyObject *object) {
@@ -151,6 +159,7 @@ PYBIND11_MODULE(qalculate, m) {
       py::class_<Number>(m, "Number")
           .def(py::init<>())
           .def(py::init(&number_from_python_int))
+          .def(py::init(&number_from_complex))
           .def(py::init([](long double value) {
             Number number;
             if (value == INFINITY)
@@ -207,6 +216,7 @@ PYBIND11_MODULE(qalculate, m) {
               py::is_operator{}));
 
   py::implicitly_convertible<long double, Number>();
+  py::implicitly_convertible<std::complex<long double>, Number>();
   py::implicitly_convertible<py::int_, Number>();
 
   // FIXME: Clean this up finally...

@@ -66,6 +66,7 @@ classes.add("ParseOptions")
 classes.add_foreign("MathStructureRef", "MathStructure")
 classes.add_implcit_cast("int", "Number")
 classes.add_implcit_cast("float", "Number")
+classes.add_implcit_cast("complex", "Number")
 
 class_extra_impl: dict[PyClass, str] = {}
 
