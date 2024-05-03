@@ -46,6 +46,7 @@ class _Method:
     body: _LingeringStringIO
     parameters: list[Parameter | _KwOnly]
     extra: list[str]
+    docstring: str
 
 
 class PyProperty:
@@ -169,6 +170,7 @@ class PyClass:
         *params: str | Parameter | _KwOnly,
         receiver: str | Parameter | Literal["auto"] | None = "auto",
         operator: bool = False,
+        docstring: str = ""
     ) -> IndentedWriter:
         return_type = _cast_type(return_type)
         if receiver == "auto":
@@ -201,6 +203,7 @@ class PyClass:
                 body=writer,
                 parameters=parameters,
                 extra=extra,
+                docstring=docstring
             )
         )
         return IndentedWriter(writer)
@@ -405,6 +408,8 @@ class PyClass:
         for method in self._methods:
             if method.name in overloaded:
                 types.write("@overload\n")
+            if method.receiver is None:
+                types.write("@staticmethod\n")
             types.write(f"def {method.name}(")
             has_self = method.receiver or method.name == "__init__"
             if has_self:

@@ -387,7 +387,11 @@ for method in Number.underlying_type.members:
 
     # These already have Number overloads
     if method.name in {"add", "subtract", "multiply", "divide"}:
-        if len(method.params) == 1 and method.params[0] != "..." and method.params[0].type == SimpleType("long"):
+        if (
+            len(method.params) == 1
+            and method.params[0] != "..."
+            and method.params[0].type == SimpleType("long")
+        ):
             continue
 
     # MathOperation is currently not supported and I don't see a reason to support it.
@@ -423,6 +427,19 @@ with Number.method("std::vector<Number>", "factorize") as body:
     with body.indent(f"if(!tmp.factorize(result))\n"):
         body.write(f'throw pybind11::value_error("Operation failed");\n')
     body.write("return result;\n")
+
+number_constant_functions = ["e", "pi", "catalan", "euler"]
+
+for constant in number_constant_functions:
+    with Number.method(
+        "Number",
+        constant,
+        receiver=None,
+        docstring=Number.underlying_type.methods[constant].docstring,
+    ) as body:
+        body.write("Number result;\n")
+        body.write(f"result.{constant}();\n")
+        body.write(f"return result;\n")
 
 math_structure_operators = [
     ("*", "__mul__"),
