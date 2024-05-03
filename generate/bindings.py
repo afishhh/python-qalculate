@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from io import StringIO
-from typing import Iterator, Literal, ParamSpec, overload
+from typing import Iterator, Literal, TypeAlias, overload
 
 from generate.parsing import (
     Parameter,
@@ -26,6 +26,16 @@ class _KwOnly:
 
 
 KW_ONLY = _KwOnly()
+
+_CastableToType: TypeAlias = "str | Type | PyClass"
+
+
+def _cast_type(value: _CastableToType) -> Type:
+    if isinstance(value, str):
+        return Type.parse(value)
+    elif isinstance(value, PyClass):
+        return SimpleType(value.underlying_name)
+    return value
 
 
 @dataclass
@@ -54,13 +64,12 @@ class PyProperty:
         self._setter = None
 
     @overload
-    def getter(self, expression: str, *, type: Type | str): ...
+    def getter(self, expression: str, *, type: _CastableToType): ...
     @overload
-    def getter(self, *, type: Type | str) -> IndentedWriter: ...
+    def getter(self, *, type: _CastableToType) -> IndentedWriter: ...
 
-    def getter(self, expression: str | None = None, *, type: Type | str):
-        if isinstance(type, str):
-            type = Type.parse(type)
+    def getter(self, expression: str | None = None, *, type: _CastableToType):
+        type = _cast_type(type)
 
         if expression is None:
             self._getter = (_LingeringStringIO(), type)
@@ -69,14 +78,15 @@ class PyProperty:
             self._getter = (expression, type)
 
     @overload
-    def setter(self, expression: str, *, param_type: Type | str): ...
+    def setter(self, expression: str, *, param_type: _CastableToType): ...
     @overload
-    def setter(self, *, param_type: Type | str) -> IndentedWriter: ...
+    def setter(self, *, param_type: _CastableToType) -> IndentedWriter: ...
 
-    def setter(self, expression: str | None = None, *, param_type: Type | str = ""):
+    def setter(
+        self, expression: str | None = None, *, param_type: _CastableToType = ""
+    ):
         if expression is None:
-            if isinstance(param_type, str):
-                param_type = Type.parse(param_type)
+            param_type = _cast_type(param_type)
             self._setter = (_LingeringStringIO(), param_type)
             return IndentedWriter(self._setter[0])
         else:
@@ -154,22 +164,30 @@ class PyClass:
 
     def method(
         self,
-        return_type: str | Type,
+        return_type: _CastableToType,
         name: str,
         *params: str | Parameter | _KwOnly,
         receiver: str | Parameter | Literal["auto"] | None = "auto",
         operator: bool = False,
     ) -> IndentedWriter:
-        if isinstance(return_type, str):
-            return_type = Type.parse(return_type)
+        return_type = _cast_type(return_type)
         if receiver == "auto":
             receiver = Parameter(
                 type=Type.parse(f"{self._bound_type} const&"), name="self"
             )
-        if isinstance(receiver, str):
+        elif isinstance(receiver, str):
             receiver = Parameter.parse(receiver)
         if receiver is not None:
             assert receiver.default is None
+
+        parameters = [
+            Parameter.parse(param) if isinstance(param, str) else param
+            for param in params
+        ]
+
+        for param in parameters:
+            if isinstance(param, Parameter):
+                assert param.name is not None
 
         writer = _LingeringStringIO()
         extra = []
@@ -181,10 +199,7 @@ class PyClass:
                 name=name,
                 receiver=receiver,
                 body=writer,
-                parameters=[
-                    Parameter.parse(param) if isinstance(param, str) else param
-                    for param in params
-                ],
+                parameters=parameters,
                 extra=extra,
             )
         )
@@ -205,7 +220,7 @@ class PyClass:
 
     def field(
         self,
-        type: Type,
+        type: _CastableToType,
         name: str,
         cpp_name: str,
         *,
@@ -213,7 +228,7 @@ class PyClass:
         docstring: str = "",
     ):
         self._fields.append(
-            _Field(type, name, cpp_name, docstring, mode == "readwrite")
+            _Field(_cast_type(type), name, cpp_name, docstring, mode == "readwrite")
         )
 
     def write_init_calls(self, writer: IndentedWriter):
@@ -469,7 +484,7 @@ class PyContext:
         if not type.targs:
             if type.name.endswith("int"):
                 return "int"
-            if (py := _BUILTIN_CPP2PYTHON.get(type.name, None)):
+            if py := _BUILTIN_CPP2PYTHON.get(type.name, None):
                 return py
 
         return self._cpp_to_class[type]
