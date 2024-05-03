@@ -35,7 +35,6 @@ class UnknownVariable(Variable):
     def assumptions(self) -> Assumptions: ...
     @assumptions.setter
     def assumptions(self, value: Assumptions) -> None: ...
-
     @property
     def interval(self) -> MathStructure: ...
     @interval.setter
@@ -50,6 +49,8 @@ class Unit(ExpressionItem):
     GRADIAN: ClassVar[Unit]
 
 class MathStructure:
+    __init__: None
+
     def compare(self, other: MathStructure) -> ComparisonResult: ...
     def compare_approximately(
         self, other: MathStructure, options: EvaluationOptions = ...
@@ -67,7 +68,8 @@ class MathStructure:
         def __repr__(self) -> str: ...
 
     class Sequence(MathStructure):
-        def __init__(self, *args: MathStructure) -> None: ...
+        __init__: None
+
         def append(self, item: "MathStructure") -> None: ...
         def __delitem__(self, idx: int) -> None: ...
 
@@ -76,34 +78,34 @@ class MathStructure:
     def __repr__(self) -> str: ...
 
     class Multiplication(Sequence):
-        pass
+        def __init__(self, *args: MathStructure) -> None: ...
 
     class Addition(Sequence):
-        pass
+        def __init__(self, *args: MathStructure) -> None: ...
 
     class BitwiseAnd(Sequence):
-        pass
+        def __init__(self, *args: MathStructure) -> None: ...
 
     class BitwiseOr(Sequence):
-        pass
+        def __init__(self, *args: MathStructure) -> None: ...
 
     class BitwiseXor(Sequence):
-        pass
+        def __init__(self, *args: MathStructure) -> None: ...
 
     class BitwiseNot(Sequence):
-        pass
+        def __init__(self, *args: MathStructure) -> None: ...
 
     class LogicalAnd(Sequence):
-        pass
+        def __init__(self, *args: MathStructure) -> None: ...
 
     class LogicalOr(Sequence):
-        pass
+        def __init__(self, *args: MathStructure) -> None: ...
 
     class LogicalXor(Sequence):
-        pass
+        def __init__(self, *args: MathStructure) -> None: ...
 
     class LogicalNot(Sequence):
-        pass
+        def __init__(self, *args: MathStructure) -> None: ...
 
     class Comparison(MathStructure):
         def __init__(
