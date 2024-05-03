@@ -20,7 +20,7 @@
               type = "github";
               owner = "Qalculate";
               repo = "libqalculate";
-              rev = "6473679b7b419740f72d396a305734382de6e821";
+              rev = "87d7a3d37223021e60ea4436b4f4a3ace0224a1e";
             };
           });
         };
