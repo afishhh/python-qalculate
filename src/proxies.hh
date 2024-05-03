@@ -229,7 +229,7 @@ public:
           py::arg("type") = ComparisonType::COMPARISON_EQUALS,
           py::arg("right") = static_cast<MathStructure *>(nullptr))
         PROXY_CHILD_ACCESSOR("left", 0) PROXY_CHILD_ACCESSOR("right", 1)
-            .def_property("comparisonType", &MathStructure::comparisonType,
+            .def_property("type", &MathStructure::comparisonType,
                           &MathStructure::setComparisonType);
   }
 
