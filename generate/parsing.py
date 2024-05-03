@@ -327,11 +327,15 @@ class Parameter:
         if (token := it.peek()) and token.text == "(":
             raise NotImplementedError("Function pointer parameters in Parameter.parse")
 
+        skip_noncode(it)
+
         if (token := it.peek()) and token.type == "ident":
             param_name = token.text
             next(it)
         else:
             param_name = None
+
+        skip_noncode(it)
 
         if (token := it.peek()) and token.text == "[":
             next(it)
