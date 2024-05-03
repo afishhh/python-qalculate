@@ -40,7 +40,7 @@ def merge_typing_files(lower: Path | str, upper: Path | str) -> str:
                 }
                 for base in stmt.bases:
                     assert isinstance(base, ast.Name)
-                    if base not in lower_base_names:
+                    if base.id not in lower_base_names:
                         lower_class.bases.append(base)
             else:
                 new_body.append(stmt)
