@@ -1,5 +1,10 @@
 import pytest
-from qalculate import parse, Variable, UnknownVariable, load_global_variables
+from qalculate import (
+    MathStructure,
+    parse,
+    Variable,
+    load_global_variables,
+)
 
 load_global_variables()
 
@@ -15,4 +20,6 @@ load_global_variables()
     ],
 )
 def test_builtin_variables(string: str, var_name: str):
-    assert parse(string).variable is Variable.get(var_name)
+    parsed = parse(string)
+    assert isinstance(parsed, MathStructure.Variable)
+    assert parsed.variable is Variable.get(var_name)

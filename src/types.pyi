@@ -30,9 +30,24 @@ class Variable(ExpressionItem):
     @staticmethod
     def get(name: str) -> Variable: ...
 
+class UnknownVariable(Variable):
+    @property
+    def assumptions(self) -> Assumptions: ...
+    @assumptions.setter
+    def assumptions(self, value: Assumptions) -> None: ...
+
+    @property
+    def interval(self) -> MathStructure: ...
+    @interval.setter
+    def interval(self, value: MathStructure) -> None: ...
+
 class Unit(ExpressionItem):
     @staticmethod
     def get(name: str) -> Unit: ...
+
+    DEGREE: ClassVar[Unit]
+    RADIAN: ClassVar[Unit]
+    GRADIAN: ClassVar[Unit]
 
 class MathStructure:
     def compare(self, other: MathStructure) -> ComparisonResult: ...

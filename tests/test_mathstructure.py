@@ -6,7 +6,6 @@ from qalculate import (
     EvaluationOptions,
     MathStructure as S,
     MathFunction as MF,
-    Variable,
     UnknownVariable,
     parse,
 )
