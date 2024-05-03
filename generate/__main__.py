@@ -371,6 +371,7 @@ number_mutating_methods_overrides = {
     "setToFloatingPoint": None,
     "intervalToPrecision": None,
     "mergeInterval": None,
+    "allroots": None,
     "factorize": None,
 }
 
@@ -421,6 +422,19 @@ for method in Number.underlying_type.members:
             body.write(f'throw pybind11::value_error("Operation failed");\n')
         body.write("return result;\n")
 
+
+with Number.method(
+    "std::vector<Number>",
+    "allroots",
+    "Number const &degree",
+    docstring=Number.underlying_type.methods["allroots"].docstring,
+) as body:
+    # Why is this non-const?
+    body.write(f"Number tmp = self;\n")
+    body.write(f"std::vector<Number> result;\n")
+    with body.indent(f"if(!tmp.allroots(degree, result))\n"):
+        body.write(f'throw pybind11::value_error("Operation failed");\n')
+    body.write("return result;\n")
 
 with Number.method(
     "std::vector<Number>",
