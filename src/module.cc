@@ -154,6 +154,7 @@ PYBIND11_MODULE(qalculate, m) {
       &PEvaluationOptions::set_isolate_var);
 
   repr_print_options.use_unicode_signs = UNICODE_SIGNS_WITHOUT_EXPONENTS;
+  repr_print_options.interval_display = INTERVAL_DISPLAY_MIDPOINT;
 
   auto number = init_auto_number(
       py::class_<Number>(m, "Number")
