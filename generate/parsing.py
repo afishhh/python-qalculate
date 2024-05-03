@@ -119,6 +119,16 @@ class SimpleType(Type):
 
         return result
 
+    @property
+    def is_primitive_integer(self) -> bool:
+        if self.targs is not None:
+            return False
+        if self.name == "int" or self.name.endswith(" int"):
+            return True
+        elif self.name == "long" or self.name.endswith(" long"):
+            return True
+        return False
+
 
 @dataclass(frozen=True, slots=True)
 class PointerType(Type):

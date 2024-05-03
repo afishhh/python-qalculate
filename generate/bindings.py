@@ -307,7 +307,7 @@ class PyClass:
             if method.name != "__init__":
                 writer.write(f" -> {method.return_type}")
 
-            with writer.indent("{\n"):
+            with writer.indent(" {\n"):
                 writer.write(method.body.getvalue())
             writer.write("}")
 
@@ -499,10 +499,12 @@ class PyContext:
         type = type.remove_cv()
 
         if not type.targs:
-            if type.name.endswith("int"):
+            if type.is_primitive_integer:
                 return "int"
             if py := _BUILTIN_CPP2PYTHON.get(type.name, None):
                 return py
+        elif type.name == "std::vector":
+            return f"list[{self.pythonize_cpp_type(type.targs[0])}]"
 
         return self._cpp_to_class[type]
 

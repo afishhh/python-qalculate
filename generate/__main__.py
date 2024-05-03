@@ -364,6 +364,64 @@ for ret, cpp_function, py_op in number_operators:
         else:
             body.write(f"return self.{cpp_function}(other);\n")
 
+number_mutating_methods_overrides = {
+    "raise": "pow",
+    "setInterval": None,
+    "setToFloatingPoint": None,
+    "intervalToPrecision": None,
+    "mergeInterval": None,
+    "factorize": None,
+}
+
+for method in Number.underlying_type.members:
+    if not isinstance(method, Struct.Method):
+        continue
+
+    if (
+        method.const
+        or method.return_type != SimpleType(name="bool")
+        or method.accessibility != Accessibility.PUBLIC
+    ):
+        continue
+
+    # These already have Number overloads
+    if method.name in {"add", "subtract", "multiply", "divide"}:
+        if len(method.params) == 1 and method.params[0] != "..." and method.params[0].type == SimpleType("long"):
+            continue
+
+    # MathOperation is currently not supported and I don't see a reason to support it.
+    if any(
+        param.type == SimpleType("MathOperation")
+        for param in method.params
+        if param != "..."
+    ):
+        continue
+
+    mapped = number_mutating_methods_overrides.get(
+        method.name, camel_to_snake(method.name)
+    )
+    if mapped is None:
+        continue
+
+    with Number.method(Number, mapped, *method.params) as body:
+        body.write(f"Number result = self;\n")
+        args = ", ".join(
+            param.name
+            for param in method.params
+            if isinstance(param, Parameter) and param.name
+        )
+        with body.indent(f"if(!result.{method.name}({args}))\n"):
+            body.write(f'throw pybind11::value_error("Operation failed");\n')
+        body.write("return result;\n")
+
+
+with Number.method("std::vector<Number>", "factorize") as body:
+    # Why is this non-const?
+    body.write(f"Number tmp = self;\n")
+    body.write(f"std::vector<Number> result;\n")
+    with body.indent(f"if(!tmp.factorize(result))\n"):
+        body.write(f'throw pybind11::value_error("Operation failed");\n')
+    body.write("return result;\n")
 
 math_structure_operators = [
     ("*", "__mul__"),
@@ -608,6 +666,7 @@ properties_for(
 extra_includes: list[tuple[Iterable[str], list[str]]] = [
     ("Options", ['"options.hh"']),
     ("Assumptions", ['"wrappers.hh"']),
+    ("Number", ["<pybind11/stl.h>"]),
     (
         ("MathStructure", "MathFunction", "Unit", "ExpressionItem"),
         ['"ref.hh"', '"options.hh"'],
