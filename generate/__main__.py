@@ -408,7 +408,9 @@ for method in Number.underlying_type.members:
     if mapped is None:
         continue
 
-    with Number.method(Number, mapped, *method.params) as body:
+    with Number.method(
+        Number, mapped, *method.params, docstring=method.docstring
+    ) as body:
         body.write(f"Number result = self;\n")
         args = ", ".join(
             param.name
@@ -420,7 +422,11 @@ for method in Number.underlying_type.members:
         body.write("return result;\n")
 
 
-with Number.method("std::vector<Number>", "factorize") as body:
+with Number.method(
+    "std::vector<Number>",
+    "factorize",
+    docstring=Number.underlying_type.methods["factorize"].docstring,
+) as body:
     # Why is this non-const?
     body.write(f"Number tmp = self;\n")
     body.write(f"std::vector<Number> result;\n")
@@ -564,6 +570,7 @@ for method in MathStructure.underlying_type.methods.values():
         "QalcRef<MathStructure>",
         camel_to_snake(method.name),
         *(param for param in exposed_params if param.name),
+        docstring=method.docstring,
     ) as body:
         body.write("MathStructureRef result = MathStructureRef::construct(self);\n")
         if method.return_type == SimpleType("bool"):

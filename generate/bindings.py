@@ -38,6 +38,10 @@ def _cast_type(value: _CastableToType) -> Type:
     return value
 
 
+def _format_docstring(value: str) -> str:
+    return f'"""{repr(value)[1:-1]}"""'
+
+
 @dataclass
 class _Method:
     return_type: Type
@@ -170,7 +174,7 @@ class PyClass:
         *params: str | Parameter | _KwOnly,
         receiver: str | Parameter | Literal["auto"] | None = "auto",
         operator: bool = False,
-        docstring: str = ""
+        docstring: str = "",
     ) -> IndentedWriter:
         return_type = _cast_type(return_type)
         if receiver == "auto":
@@ -203,7 +207,7 @@ class PyClass:
                 body=writer,
                 parameters=parameters,
                 extra=extra,
-                docstring=docstring
+                docstring=docstring,
             )
         )
         return IndentedWriter(writer)
@@ -243,8 +247,13 @@ class PyClass:
                 writer.write("_readonly")
 
             writer.write(
-                f"({cpp_string(field.name)}, &{self._bound_type}::{field.cpp_name})\n"
+                f"({cpp_string(field.name)}, &{self._bound_type}::{field.cpp_name}"
             )
+
+            if field.docstring:
+                writer.write(f", {cpp_string(field.docstring)}")
+
+            writer.write(")\n")
 
         for property in self._properties:
             writer.write(".def_property")
@@ -278,6 +287,9 @@ class PyClass:
                     with writer.indent(") {"):
                         writer.write(setter[0].getvalue())
                     writer.write("}")
+
+            if property._docstring:
+                writer.write(f", {cpp_string(property._docstring)}")
 
             writer.write(")\n")
 
@@ -327,6 +339,10 @@ class PyClass:
                     writer.write(f", pybind11::arg({cpp_string(param.name)})")
                     if param.default:
                         writer.write(f" = {param.default}")
+
+            if method.docstring:
+                writer.write(f", {cpp_string(method.docstring)}")
+
             writer.write(")\n")
 
     def write_pyclass_expression(self, writer: IndentedWriter, module_expression: str):
@@ -386,7 +402,7 @@ class PyClass:
             return_type = context.pythonize_cpp_type(python_type)
             with types.indent(f"def {name}(self) -> {return_type}:\n"):
                 if docstring:
-                    types.write(f'"""{repr(docstring)[1:-1]}"""\n')
+                    types.write(f"{_format_docstring(docstring)}\n")
                 types.write("...\n")
 
             if writeable:
@@ -428,7 +444,12 @@ class PyClass:
             types.write(")")
             if method.name != "__init__":
                 types.write(f" -> {context.pythonize_cpp_type(method.return_type)}")
-            types.write(": ...\n\n")
+            if method.docstring:
+                with types.indent(":\n"):
+                    types.write(f"{_format_docstring(method.docstring)}\n")
+                    types.write("...\n")
+            else:
+                types.write(": ...\n")
 
         types.dedent()
 
