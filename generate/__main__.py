@@ -43,7 +43,7 @@ typings = prepare_impl_file(StringIO())
 typings.write("import typing\n")
 
 classes = PyContext(qalculate_sources)
-classes.add("MathStructure", holder="QalcRef<MathStructure>")
+MathStructure = classes.add("MathStructure", holder="QalcRef<MathStructure>")
 classes.add("ExpressionItem", holder="QalcRef<ExpressionItem>")
 classes.add("Assumptions", wrapper="class PAssumptions")
 classes.add("ExpressionName")
@@ -57,10 +57,12 @@ classes.add(
     holder="QalcRef<MathFunction>",
     bases=["ExpressionItem"],
 )
-classes.add("Number")
+Number = classes.add("Number")
 classes.add("SortOptions")
 classes.add("PrintOptions")
 classes.add("ParseOptions")
+
+classes.add_foreign("MathStructureRef", "MathStructure")
 
 class_extra_impl: dict[PyClass, str] = {}
 
@@ -344,20 +346,33 @@ number_operators = [
     ("bitXor", "__xor__"),
 ]
 
-with function_declaration(
-    f"py::class_<Number> &add_number_operators(py::class_<Number> &class_)"
-):
-    with impl.indent("return class_\n"):
-        for qalc_function, operator in number_operators:
-            with impl.indent(
-                f'.def("{operator}", [](Number const &self, Number const &other) {{\n'
-            ):
-                impl.write(f"Number result = self;\n")
-                with impl.indent(f"if(!result.{qalc_function}(other))\n"):
-                    impl.write(f'throw py::value_error("Operation failed");\n')
-                impl.write("return result;\n")
-            impl.write("}, py::is_operator{})\n")
-        impl.write(";\n")
+for cpp_function, py_op in number_operators:
+    with Number.method(Number, py_op, "Number const& other", operator=True) as body:
+        body.write(f"Number result = self;\n")
+        with body.indent(f"if(!result.{cpp_function}(other))\n"):
+            body.write(f'throw pybind11::value_error("Operation failed");\n')
+        body.write("return result;\n")
+
+
+math_structure_operators = [
+    ("*", "__mul__"),
+    ("/", "__truediv__"),
+    ("+", "__add__"),
+    ("-", "__sub__"),
+    ("^", "__xor__"),
+]
+
+for cpp_op, py_op in math_structure_operators:
+    for other_type in ["MathStructure const&", "Number const&", "std::string"]:
+        with MathStructure.method(
+            "MathStructureRef", py_op, f"{other_type} other", operator=True
+        ) as body:
+            body.write("MathStructureRef result = MathStructureRef::construct(self);\n")
+            body.write(f"*result {cpp_op}= other;\n")
+            body.write("return result;\n")
+
+with MathStructure.method("MathStructureRef", "__neg__", operator=True) as body:
+    body.write("return MathStructureRef::adopt(-self);\n")
 
 
 struct = qalculate_sources.enum("StructureType")
@@ -416,7 +431,6 @@ math_structure_overrides: dict[str, tuple[str | None, str]] = {
     "timeval": (None, "static_cast<struct timeval*>(nullptr)"),
 }
 
-MathStructure = classes["MathStructure"]
 for method in MathStructure.underlying_type.methods.values():
     # FIXME: funny workaround (Cannot accept a std::vector* with pybind)
     if method.name in ("integrate", "int"):
@@ -472,46 +486,6 @@ for method in MathStructure.underlying_type.methods.values():
                 f"Mutating MathStructure method return type {method.return_type} handling not implemented"
             )
         body.write("return result;\n")
-
-math_structure_operators = [
-    ("*", "__mul__"),
-    ("*=", "__imul__"),
-    ("/", "__truediv__"),
-    ("/=", "__itruediv__"),
-    ("+", "__add__"),
-    ("+=", "__iadd__"),
-    ("-", "__sub__"),
-    ("-=", "__isub__"),
-    ("^", "__xor__"),
-    ("^=", "__ixor__"),
-]
-
-with function_declaration(
-    f"{MATH_STRUCTURE_CLASS} &add_math_structure_operators({MATH_STRUCTURE_CLASS} &class_)"
-):
-    with impl.indent("return class_"):
-        for cpp_op, py_op in math_structure_operators:
-            # Non-copying operator
-            if cpp_op.endswith("="):
-                for other_type in ["Number", "std::string"]:
-                    impl.write(f".def(py::self {cpp_op} {other_type}())\n")
-                impl.write(f".def(py::self {cpp_op} py::self)\n")
-            else:
-                for other_type in ["MathStructure", "Number", "std::string"]:
-                    with impl.indent(
-                        f'.def("{py_op}", [](MathStructure const &self, {other_type} const &other) {{\n'
-                    ):
-                        impl.write(
-                            "MathStructureRef result = MathStructureRef::construct(self);\n"
-                        )
-                        impl.write(f"*result {cpp_op}= other;\n")
-                        impl.write("return result;\n")
-                    impl.write("}, py::is_operator{})\n")
-
-        with impl.indent(f'.def("__neg__", [](MathStructure const &self) {{\n'):
-            impl.write("return MathStructureRef::adopt(-self);\n")
-        impl.write("}, py::is_operator{})\n")
-    impl.write(";\n")
 
 impl.write('#include "proxies.hh"\n')
 
