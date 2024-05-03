@@ -24,5 +24,10 @@
             };
           });
         };
+        # For testing USE_SYSTEM_QALCULATE=OFF
+        devShells.default = self.packages."${system}".default.overrideAttrs (old: {
+          nativeBuildInputs = old.nativeBuildInputs ++ self.packages."${system}".libqalculate.nativeBuildInputs;
+          buildInputs = old.buildInputs ++ self.packages."${system}".libqalculate.buildInputs;
+        });
       });
 }
