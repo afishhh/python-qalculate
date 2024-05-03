@@ -6,6 +6,10 @@ set(
 	USE_SYSTEM_LIBQALCULATE ON
 	CACHE BOOL "Whether to use libqalculate from pkg-config or build it separately."
 )
+set(
+	LIBQALCULATE_BUILD_DIR
+	CACHE STRING "Where to build libqalculate (if USE_SYSTEM_LIBQALCULATE is OFF)."
+)
 
 if(USE_SYSTEM_LIBQALCULATE)
 	find_package(PkgConfig REQUIRED)
@@ -66,11 +70,13 @@ if(NOT USE_SYSTEM_LIBQALCULATE)
 	if(LIBQALCULATE_IS_IN_BINARY_DIR)
 		set(LIBQALCULATE_BUILD_DIR "${LIBQALCULATE_RESOLVED_PATH}")
 	else()
-		set(LIBQALCULATE_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/libqalculate-build")
+		if(NOT LIBQALCULATE_BUILD_DIR)
+			set(LIBQALCULATE_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/libqalculate-build")
+		endif()
 		if(NOT EXISTS "${LIBQALCULATE_BUILD_DIR}")
 			execute_process(
 				COMMAND
-					"${CMAKE_COMMAND}" -E copy_directory_if_different
+					"${CMAKE_COMMAND}" -E copy_directory
 					"${LIBQALCULATE_RESOLVED_PATH}" "${LIBQALCULATE_BUILD_DIR}"
 				COMMAND_ERROR_IS_FATAL ANY
 			)
@@ -83,16 +89,26 @@ if(NOT USE_SYSTEM_LIBQALCULATE)
 			"${LIBQALCULATE_BUILD_DIR}/autogen.sh"
 			--disable-textport
 		WORKING_DIRECTORY "${LIBQALCULATE_BUILD_DIR}"
+		COMMENT "Configuring libqalculate"
 		VERBATIM
 	)
 
 	set(LIBQALCULATE_SO "${LIBQALCULATE_BUILD_DIR}/libqalculate/.libs/libqalculate.so")
 
+	file(
+		GLOB LIBQALCULATE_SOURCES
+		"${LIBQALCULATE_BUILD_DIR}/libqalculate/*.hh"
+		"${LIBQALCULATE_BUILD_DIR}/libqalculate/*.cc"
+	)
+
 	add_custom_command(
 		OUTPUT "${LIBQALCULATE_SO}"
 		COMMAND make
 		WORKING_DIRECTORY "${LIBQALCULATE_BUILD_DIR}"
-		DEPENDS "${LIBQALCULATE_BUILD_DIR}/Makefile"
+		DEPENDS
+			"${LIBQALCULATE_BUILD_DIR}/Makefile"
+			"${LIBQALCULATE_SOURCES}"
+		COMMENT "Building libqalculate"
 		VERBATIM
 	)
 
