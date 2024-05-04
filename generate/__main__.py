@@ -668,8 +668,11 @@ with function_declaration(
 ):
     for name in structure_types:
         class_ = f"MathStructure{snake_to_pascal(name)}Proxy"
+        python_name = snake_to_pascal(name)
+        if python_name == "Datetime":
+            python_name = "DateTime"
         impl.write(
-            f'qalc_class_<{class_}, {class_}::Base> {name.lower()}(class_, "{snake_to_pascal(name)}", py::is_final{{}});\n'
+            f'qalc_class_<{class_}, {class_}::Base> {name.lower()}(class_, "{python_name}", py::is_final{{}});\n'
         )
         impl.write(f"{class_}::init({name.lower()});\n")
 
