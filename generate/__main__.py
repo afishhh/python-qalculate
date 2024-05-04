@@ -481,10 +481,7 @@ for method in Number.underlying_type.members:
 
     # These already have Number overloads
     if method.name in {"add", "subtract", "multiply", "divide"}:
-        if (
-            len(method.params) == 1
-            and method.params[0].type == SimpleType("long")
-        ):
+        if len(method.params) == 1 and method.params[0].type == SimpleType("long"):
             continue
 
     # MathOperation is currently not supported and I don't see a reason to support it.
@@ -679,25 +676,30 @@ with function_declaration(
     impl.write("return class_;\n")
 
 
-header.write("namespace PYBIND11_NAMESPACE {\n")
-with header.indent("template <> struct polymorphic_type_hook<MathStructure> {\n"):
-    with header.indent(
-        "static void const *get(MathStructure const *src, std::type_info const *&type) {\n"
+with output_directory.writer("mathstructure_type_hook.cc") as writer:
+    writer = IndentedWriter(writer)
+    writer.write("#include <pybind11/pybind11.h>\n")
+    writer.write("#include <libqalculate/MathStructure.h>\n")
+    writer.write('#include "proxies.hh"\n')
+    writer.write("\n")
+    writer.write("namespace PYBIND11_NAMESPACE {\n")
+
+    with writer.indent(
+        "void const *polymorphic_type_hook<MathStructure>::get(MathStructure const *src, std::type_info const *&type) {\n"
     ):
-        header.write("if(src == nullptr) return nullptr;\n")
-        header.write("switch(src->type()) {\n")
+        writer.write("if(src == nullptr) return nullptr;\n")
+        writer.write("switch(src->type()) {\n")
         for name in structure_types:
             class_ = f"MathStructure{snake_to_pascal(name)}Proxy"
-            with header.indent(f"case STRUCT_{name}:\n"):
-                header.write(f"type = &typeid({class_});\n")
-                header.write(f"return static_cast<{class_} const *>(src);\n")
-        with header.indent(f"default:\n"):
-            header.write(
+            with writer.indent(f"case STRUCT_{name}:\n"):
+                writer.write(f"type = &typeid({class_});\n")
+                writer.write(f"return static_cast<{class_} const *>(src);\n")
+        with writer.indent(f"default:\n"):
+            writer.write(
                 'throw std::runtime_error("No proxy object for MathStructure type " + std::to_string(src->type()));\n'
             )
-        header.write("}\n")
-    header.write("}\n")
-header.write("};\n}\n")
+        writer.write("}\n")
+    writer.write("};\n}\n")
 
 options(
     classes["ExpressionName"],

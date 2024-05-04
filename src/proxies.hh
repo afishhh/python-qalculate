@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <complex>
 #include <concepts>
 #include <libqalculate/MathStructure.h>
 #include <libqalculate/qalculate.h>
@@ -10,8 +11,7 @@
 #include <pybind11/typing.h>
 #include <string_view>
 
-namespace py = pybind11;
-
+#include "number.hh"
 #include "ref.hh"
 
 // FIXME: split up generated.hh into separate files
@@ -108,11 +108,21 @@ public:
     PROXY_INIT;
   }
 
+  MathStructureNumberProxy(py::int_ value)
+      : MathStructureNumberProxy(number_from_python_int(value)) {}
+  MathStructureNumberProxy(long double value)
+      : MathStructureNumberProxy(Number(value)) {}
+  MathStructureNumberProxy(std::complex<long double> value)
+      : MathStructureNumberProxy(number_from_complex(value)) {}
+
   using Base = MathStructure;
 
   static void init(qalc_class_<MathStructureNumberProxy, Base> &c) {
     c.def(py::init<>())
         .def(py::init<Number>())
+        .def(py::init<py::int_>())
+        .def(py::init<long double>())
+        .def(py::init<std::complex<long double>>())
         .def_property("value",
                       (Number & (MathStructure ::*)()) & MathStructure::number,
                       [](MathStructureNumberProxy &self, Number const &value) {
@@ -124,6 +134,10 @@ public:
               return self.number().print(repr_print_options);
             },
             py::is_operator{});
+    py::implicitly_convertible<py::int_, MathStructureNumberProxy>();
+    py::implicitly_convertible<long double, MathStructureNumberProxy>();
+    py::implicitly_convertible<std::complex<long double>,
+                               MathStructureNumberProxy>();
   }
 
   void repr(std::string &output) const {
@@ -250,17 +264,18 @@ STUB_PROXY(Datetime);
 
 class MathStructureVariableProxy final : public MathStructure {
 public:
+  MathStructureVariableProxy(QalcRef<Variable> variable) {
+    PROXY_INIT;
+    setType(STRUCT_VARIABLE);
+    setVariable(variable.forget());
+  }
+
   using Base = MathStructure;
 
   static void init(qalc_class_<MathStructureVariableProxy, Base> &class_) {
-    class_.def(py::init([](QalcRef<Variable> const &variable) {
-      auto result = QalcRef<MathStructureVariableProxy>::construct();
-      result->setType(STRUCT_VARIABLE);
-      result->setVariable(variable);
-      return result;
-    }));
-    class_.def_property("variable", &MathStructure::variable,
-                        &MathStructure::setVariable);
+    class_.def(py::init<QalcRef<Variable>>())
+        .def_property("variable", &MathStructure::variable,
+                      &MathStructure::setVariable);
   }
 
   void repr(std ::string &output) const {
@@ -273,11 +288,14 @@ public:
 
 class MathStructureFunctionProxy final : public MathStructure {
 public:
-  MathStructureFunctionProxy(QalcRef<MathFunction> function, py::args args)
-      : MathStructure() {
+  MathStructureFunctionProxy(QalcRef<MathFunction> function) : MathStructure() {
     PROXY_INIT;
     setType(STRUCT_FUNCTION);
     setFunction(function.forget());
+  }
+
+  MathStructureFunctionProxy(QalcRef<MathFunction> &&function, py::args args)
+      : MathStructureFunctionProxy(function) {
     for (auto arg : args) {
       auto *marg = arg.cast<MathStructure *>();
       marg->ref();
@@ -367,7 +385,37 @@ public:
 
 STUB_PROXY(Negate);
 STUB_PROXY(Inverse);
-STUB_PROXY(Vector);
+
+class MathStructureVectorProxy : public MathStructureSequence {
+public:
+  MathStructureVectorProxy() : MathStructureSequence() {
+    PROXY_INIT;
+    setType(STRUCT_VECTOR);
+  }
+  MathStructureVectorProxy(py::typing::List<MathStructure> items)
+      : MathStructureVectorProxy() {
+    for (auto item : items)
+      _math_structure_append_child(*this, item.cast<MathStructureRef>());
+  }
+
+  using Base = MathStructureSequence;
+
+  static void init(qalc_class_<MathStructureVectorProxy, Base> &c) {
+    c.def(py::init<>()).def(py::init<py::typing::List<MathStructure>>());
+    py::implicitly_convertible<py::typing::List<MathStructure>,
+                               MathStructureVectorProxy>();
+  }
+
+  void repr(std::string &output) const {
+    output += "MathStructure.Vector([";
+    for (size_t i = 0; i < size(); ++i) {
+      if (i)
+        output += ", ";
+      MathStructure_repr(&(*this)[i], output);
+    }
+    output += "])";
+  }
+};
 
 class MathStructureUndefinedProxy : public MathStructure {
 public:
