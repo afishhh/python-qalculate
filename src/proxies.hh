@@ -8,7 +8,6 @@
 #include <pybind11/cast.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/pytypes.h>
-#include <pybind11/typing.h>
 #include <string_view>
 
 #include "number.hh"
@@ -392,8 +391,7 @@ public:
     PROXY_INIT;
     setType(STRUCT_VECTOR);
   }
-  MathStructureVectorProxy(py::typing::List<MathStructure> items)
-      : MathStructureVectorProxy() {
+  MathStructureVectorProxy(py::list items) : MathStructureVectorProxy() {
     for (auto item : items)
       _math_structure_append_child(*this, item.cast<MathStructureRef>());
   }
@@ -401,9 +399,8 @@ public:
   using Base = MathStructureSequence;
 
   static void init(qalc_class_<MathStructureVectorProxy, Base> &c) {
-    c.def(py::init<>()).def(py::init<py::typing::List<MathStructure>>());
-    py::implicitly_convertible<py::typing::List<MathStructure>,
-                               MathStructureVectorProxy>();
+    c.def(py::init<>()).def(py::init<py::list>());
+    py::implicitly_convertible<py::list, MathStructureVectorProxy>();
   }
 
   void repr(std::string &output) const {

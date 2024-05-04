@@ -9,7 +9,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/pytypes.h>
 #include <pybind11/stl.h>
-#include <pybind11/typing.h>
 #include <string_view>
 
 #include "expression_items.hh"
@@ -138,18 +137,42 @@ PYBIND11_MODULE(qalculate, m) {
   def(py::init(                                                                \
       [](from_type value) { return MathStructureRef(new proxy(value)); }))
 
+  auto math_structure_cls =
+      qalc_class_<MathStructure>(m, "MathStructure", py::is_final{});
+
+  add_expression_name(m);
+  add_expression_item(m);
+  add_assumptions(m);
+  add_variable(m).def(py::init([](MathStructureVariableProxy const &m) {
+                        return QalcRef(m.variable());
+                      }),
+                      py::arg("math_structure"), py::pos_only{},
+                      py::return_value_policy::reference_internal);
+  add_unknown_variable(m);
+  add_math_function(m);
+  add_builtin_functions(m);
+  add_unit(m);
+
+  py::implicitly_convertible<py::int_, MathStructure>();
+  py::implicitly_convertible<long double, MathStructure>();
+  py::implicitly_convertible<std::complex<long double>, MathStructure>();
+  py::implicitly_convertible<py::list, MathStructure>();
+  py::implicitly_convertible<Variable, MathStructure>();
+  py::implicitly_convertible<MathFunction, MathStructure>();
+
   // FIXME: Clean this up finally...
   add_math_structure_proxies(init_math_structure_children(
       m, init_auto_math_structure(
-             qalc_class_<MathStructure>(m, "MathStructure", py::is_final{})
+             math_structure_cls
                  .DEF_PROXY_CONVERSION(py::int_, MathStructureNumberProxy)
                  .DEF_PROXY_CONVERSION(long double, MathStructureNumberProxy)
                  .DEF_PROXY_CONVERSION(std::complex<long double>,
                                        MathStructureNumberProxy)
-                 .DEF_PROXY_CONVERSION(py::typing::List<MathStructure>,
-                                       MathStructureVectorProxy)
-                 .DEF_PROXY_CONVERSION(QalcRef<Variable>, MathStructureVariableProxy)
-                 .DEF_PROXY_CONVERSION(QalcRef<MathFunction>, MathStructureFunctionProxy)
+                 .DEF_PROXY_CONVERSION(py::list, MathStructureVectorProxy)
+                 .DEF_PROXY_CONVERSION(QalcRef<Variable>,
+                                       MathStructureVariableProxy)
+                 .DEF_PROXY_CONVERSION(QalcRef<MathFunction>,
+                                       MathStructureFunctionProxy)
 
                  .def("compare", &MathStructure::compare)
                  .def("compare_approximately",
@@ -174,29 +197,9 @@ PYBIND11_MODULE(qalculate, m) {
                      },
                      py::is_operator{}))));
 
-  py::implicitly_convertible<py::int_, MathStructure>();
-  py::implicitly_convertible<long double, MathStructure>();
-  py::implicitly_convertible<std::complex<long double>, MathStructure>();
-  py::implicitly_convertible<py::typing::List<MathStructure>, MathStructure>();
-  py::implicitly_convertible<Variable, MathStructure>();
-  py::implicitly_convertible<MathFunction, MathStructure>();
-
   number.def(py::init([](MathStructureNumberProxy const &structure) {
     return structure.number();
   }));
-
-  add_expression_name(m);
-  add_expression_item(m);
-  add_assumptions(m);
-  add_variable(m).def(py::init([](MathStructureVariableProxy const &m) {
-                        return QalcRef(m.variable());
-                      }),
-                      py::arg("math_structure"), py::pos_only{},
-                      py::return_value_policy::reference_internal);
-  add_unknown_variable(m);
-  add_math_function(m);
-  add_builtin_functions(m);
-  add_unit(m);
 
   py::implicitly_convertible<Variable, MathStructureVariableProxy>();
   py::implicitly_convertible<MathStructureVariableProxy, Variable>();

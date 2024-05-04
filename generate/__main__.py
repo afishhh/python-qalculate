@@ -69,6 +69,12 @@ classes.add_foreign("MathStructureRef", "MathStructure")
 classes.add_implcit_cast("int", "Number")
 classes.add_implcit_cast("float", "Number")
 classes.add_implcit_cast("complex", "Number")
+classes.add_implcit_cast("int", "MathStructure")
+classes.add_implcit_cast("float", "MathStructure")
+classes.add_implcit_cast("complex", "MathStructure")
+classes.add_implcit_cast("list[MathStructure]", "MathStructure")
+classes.add_implcit_cast("Variable", "MathStructure")
+classes.add_implcit_cast("MathFunction", "MathStructure")
 
 class_extra_impl: dict[PyClass, str] = {}
 
@@ -542,6 +548,7 @@ properties_for(
     renames={
         # Remove type-specific checks (use isinstance instead)
         **{f"is{snake_to_pascal(name)}": None for name in structure_types},
+        **{f"is{snake_to_pascal(name)}_exp": None for name in structure_types},
         # Type-specific getters
         **{f"{snake_to_camel(name)}": None for name in structure_types},
         **{
@@ -554,6 +561,9 @@ properties_for(
                 "isMatrix",
                 "symbol",
                 "number",
+                "function_value",
+                "unit_exp_unit",
+                "isPlural",
                 "last",
                 "countChildren",
                 "refcount",
@@ -824,6 +834,7 @@ types_output.write_text(
     merge_typing_files(
         typings._inner.getvalue(),
         Path(__file__).parent.parent / "src" / "types.pyi",
+        classes
     )
 )
 

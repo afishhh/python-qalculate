@@ -537,6 +537,10 @@ class PyContext:
     def apply_implicit_casts(self, type: str) -> str:
         return " | ".join(self._implicit_casts.get(type, []) + [type])
 
+    @property
+    def implicit_casts(self) -> dict[str, list[str]]:
+        return self._implicit_casts
+
     def _cpp_type_for_wrapper(self, type: Type) -> Type:
         if isinstance(type, PointerType):
             return PointerType(
