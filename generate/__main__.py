@@ -1,4 +1,5 @@
 from io import StringIO
+from typing import Literal
 from pathlib import Path
 import re
 from contextlib import contextmanager
@@ -12,6 +13,7 @@ from .parsing import (
     Accessibility,
     Parameter,
     ParsedSourceFiles,
+    PointerType,
     SimpleType,
     Struct,
     Type,
@@ -132,7 +134,7 @@ def properties_for(
             f"&{pyclass.underlying_name}::{member.name}", type=member.return_type
         )
         if setter and len(setter.params) == 1 and allow_readwrite:
-            assert setter.params[0] != "..."
+            assert not setter.variadic
             property.setter(
                 f"&{pyclass.underlying_name}::{setter.name}",
                 param_type=setter.params[0].type,
@@ -365,14 +367,105 @@ for ret, cpp_function, py_op in number_operators:
         else:
             body.write(f"return self.{cpp_function}(other);\n")
 
+
+def wrap_method(
+    pyclass: PyClass,
+    method: Struct.Method,
+    name: str | None = None,
+    output: Literal["return", "self"] | Parameter = "return",
+    error_handling: Literal["return_false", "none"] = "none",
+    copy_self: bool | None = None,
+):
+    if name is None:
+        name = method.name
+
+    if output == "self":
+        output_type = pyclass.implementation_name
+        if copy_self is None:
+            copy_self = True
+    elif output == "return":
+        output_type = method.return_type
+        assert error_handling != "return_false"
+    else:
+        assert isinstance(output.type, PointerType)
+        output_type = output.type.inner
+
+    input_params: list[Parameter] = []
+    for param in method.params:
+        if method.variadic:
+            raise NotImplementedError("Wrapping variadic methods is not supported yet")
+        elif param is not output:
+            input_params.append(
+                Parameter(
+                    type=classes.cpp_type_for_wrapper(param.type),
+                    name=param.name,
+                    default=param.default,
+                )
+            )
+
+    with pyclass.method(
+        output_type, name, *input_params, docstring=method.docstring
+    ) as body:
+        self_name = "self"
+        if copy_self:
+            body.write(f"{pyclass.implementation_name} _tmp = {self_name};\n")
+            self_name = "_tmp"
+
+        if isinstance(output, Parameter):
+            body.write(f"{output_type} {output.name};\n")
+
+        args = ", ".join(
+            param.name
+            for param in method.params
+            if isinstance(param, Parameter) and param.name
+        )
+        call_expr = f"{self_name}.{method.name}({args})"
+
+        if error_handling == "return_false":
+            with body.indent(f"if(!{call_expr})\n"):
+                body.write(f'throw pybind11::value_error("Operation failed");\n')
+        elif output == "return":
+            body.write(f"return {call_expr};\n")
+        else:
+            body.write(f"{call_expr};\n")
+
+        if output == "self":
+            body.write(f"return {self_name};\n")
+        elif isinstance(output, Parameter):
+            body.write(f"return {output.name};\n")
+
+
+def auto_wrap_method(pyclass: PyClass, method: Struct.Method, name: str | None = None):
+    output = "self" if method.return_type == SimpleType("void") else "return"
+    for param in method.params:
+        if isinstance(param.type, PointerType) and not param.type.inner.const:
+            if isinstance(output, Parameter):
+                raise RuntimeError(
+                    "auto_wrap_method failed: multiple inferred output parameters"
+                )
+            output = param
+    error_handling = "none"
+    if method.return_type == SimpleType("bool"):
+        error_handling = "return_false"
+        if output == "return":
+            output = "self"
+
+    wrap_method(
+        pyclass,
+        method,
+        name=name,
+        output=output,
+        error_handling=error_handling,
+        copy_self=not method.const,
+    )
+
+
 number_mutating_methods_overrides = {
     "raise": "pow",
     "setInterval": None,
     "setToFloatingPoint": None,
     "intervalToPrecision": None,
     "mergeInterval": None,
-    "allroots": None,
-    "factorize": None,
 }
 
 for method in Number.underlying_type.members:
@@ -390,17 +483,12 @@ for method in Number.underlying_type.members:
     if method.name in {"add", "subtract", "multiply", "divide"}:
         if (
             len(method.params) == 1
-            and method.params[0] != "..."
             and method.params[0].type == SimpleType("long")
         ):
             continue
 
     # MathOperation is currently not supported and I don't see a reason to support it.
-    if any(
-        param.type == SimpleType("MathOperation")
-        for param in method.params
-        if param != "..."
-    ):
+    if any(param.type == SimpleType("MathOperation") for param in method.params):
         continue
 
     mapped = number_mutating_methods_overrides.get(
@@ -409,44 +497,8 @@ for method in Number.underlying_type.members:
     if mapped is None:
         continue
 
-    with Number.method(
-        Number, mapped, *method.params, docstring=method.docstring
-    ) as body:
-        body.write(f"Number result = self;\n")
-        args = ", ".join(
-            param.name
-            for param in method.params
-            if isinstance(param, Parameter) and param.name
-        )
-        with body.indent(f"if(!result.{method.name}({args}))\n"):
-            body.write(f'throw pybind11::value_error("Operation failed");\n')
-        body.write("return result;\n")
+    auto_wrap_method(Number, method, name=mapped)
 
-
-with Number.method(
-    "std::vector<Number>",
-    "allroots",
-    "Number const &degree",
-    docstring=Number.underlying_type.methods["allroots"].docstring,
-) as body:
-    # Why is this non-const?
-    body.write(f"Number tmp = self;\n")
-    body.write(f"std::vector<Number> result;\n")
-    with body.indent(f"if(!tmp.allroots(degree, result))\n"):
-        body.write(f'throw pybind11::value_error("Operation failed");\n')
-    body.write("return result;\n")
-
-with Number.method(
-    "std::vector<Number>",
-    "factorize",
-    docstring=Number.underlying_type.methods["factorize"].docstring,
-) as body:
-    # Why is this non-const?
-    body.write(f"Number tmp = self;\n")
-    body.write(f"std::vector<Number> result;\n")
-    with body.indent(f"if(!tmp.factorize(result))\n"):
-        body.write(f'throw pybind11::value_error("Operation failed");\n')
-    body.write("return result;\n")
 
 number_constant_functions = ["e", "pi", "catalan", "euler"]
 
@@ -547,14 +599,12 @@ for method in MathStructure.underlying_type.methods.values():
         continue
 
     # Ignore variadic methods
-    if "..." in method.params:
+    if method.variadic:
         print(f"warning: ignoring variadic MathStructure method: {method.params}")
         continue
 
     exposed_params = []
     for param in method.params:
-        assert param != "..."
-
         name = param.name
         type = param.type
         default = param.default

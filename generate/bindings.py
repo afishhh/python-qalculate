@@ -536,3 +536,24 @@ class PyContext:
 
     def apply_implicit_casts(self, type: str) -> str:
         return " | ".join(self._implicit_casts.get(type, []) + [type])
+
+    def _cpp_type_for_wrapper(self, type: Type) -> Type:
+        if isinstance(type, PointerType):
+            return PointerType(
+                inner=self._cpp_type_for_wrapper(type.inner),
+                kind=type.kind,
+                const=type.const,
+                volatile=type.volatile,
+            )
+        elif isinstance(type, SimpleType):
+            if type.name in self._classes:
+                pyclass = self._classes[type.name]
+                return SimpleType(
+                    name=pyclass.implementation_name,
+                    const=type.const,
+                    volatile=type.volatile,
+                )
+        return type
+
+    def cpp_type_for_wrapper(self, type: _CastableToType) -> Type:
+        return self._cpp_type_for_wrapper(_cast_type(type))

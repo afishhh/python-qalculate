@@ -388,7 +388,8 @@ class Struct(Declaration):
         docstring: str
         return_type: Type
         name: str
-        params: list[Parameter | Literal["..."]]
+        params: list[Parameter]
+        variadic: bool
         const: bool
         virtual: bool
 
@@ -434,22 +435,17 @@ class Enum(Declaration):
 
 def _parse_function_params(
     tokens: Sequence[Token],
-) -> list[Parameter | Literal["..."]] | None:
+) -> tuple[list[Parameter], bool] | None:
     # C-style no-argument function declaration
     if tokens == [Token(type="ident", text="void")]:
-        return []
+        return ([], False)
 
     result = []
 
     while tokens:
         if tokens[0].text == "...":
-            result.append("...")
-            if len(tokens) > 1:
-                assert tokens[1].text == ","
-                tokens = tokens[2:]
-            else:
-                tokens = tokens[1:]
-            continue
+            assert len(tokens) == 1
+            return (result, True)
 
         param_type, tokens = take_type(tokens)
 
@@ -493,7 +489,7 @@ def _parse_function_params(
 
         result.append(Parameter(param_type, param_name, param_default))
 
-    return result
+    return (result, False)
 
 
 def _parse_struct_block(
@@ -593,14 +589,15 @@ def _parse_struct_block(
                 )
 
                 rest = list(filter_noncode(rest[args_start + 1 : args_end]))
-                params = _parse_function_params(rest)
-                if params is not None:
+                parsed = _parse_function_params(rest)
+                if parsed is not None:
                     method = Struct.Method(
                         accessibility=access,
                         docstring=current_comment.strip(),
                         return_type=member_type,
                         name=member_name,
-                        params=params,
+                        params=parsed[0],
+                        variadic=parsed[1],
                         const=const_idx != -1,
                         virtual=is_virtual,
                     )
