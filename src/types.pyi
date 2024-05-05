@@ -63,7 +63,7 @@ class MathStructure:
         def __repr__(self) -> str: ...
 
     class Sequence(MathStructure):
-        __init__: None
+        def __init__(self, *args: MathStructure) -> None: ...
 
         def append(self, item: "MathStructure") -> None: ...
         def __delitem__(self, idx: int) -> None: ...
@@ -73,34 +73,34 @@ class MathStructure:
     def __repr__(self) -> str: ...
 
     class Multiplication(Sequence):
-        def __init__(self, *args: MathStructure) -> None: ...
+        pass
 
     class Addition(Sequence):
-        def __init__(self, *args: MathStructure) -> None: ...
+        pass
 
     class BitwiseAnd(Sequence):
-        def __init__(self, *args: MathStructure) -> None: ...
+        pass
 
     class BitwiseOr(Sequence):
-        def __init__(self, *args: MathStructure) -> None: ...
+        pass
 
     class BitwiseXor(Sequence):
-        def __init__(self, *args: MathStructure) -> None: ...
+        pass
 
     class BitwiseNot(Sequence):
-        def __init__(self, *args: MathStructure) -> None: ...
+        pass
 
     class LogicalAnd(Sequence):
-        def __init__(self, *args: MathStructure) -> None: ...
+        pass
 
     class LogicalOr(Sequence):
-        def __init__(self, *args: MathStructure) -> None: ...
+        pass
 
     class LogicalXor(Sequence):
-        def __init__(self, *args: MathStructure) -> None: ...
+        pass
 
     class LogicalNot(Sequence):
-        def __init__(self, *args: MathStructure) -> None: ...
+        pass
 
     class Comparison(MathStructure):
         def __init__(
