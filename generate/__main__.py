@@ -395,6 +395,8 @@ def wrap_method(
     else:
         assert isinstance(output.type, PointerType)
         output_type = output.type.inner
+    if copy_self is None:
+        copy_self = not method.const
 
     input_params: list[Parameter] = []
     for param in method.params:
@@ -443,18 +445,17 @@ def wrap_method(
 
 def auto_wrap_method(pyclass: PyClass, method: Struct.Method, name: str | None = None):
     output = "self" if method.return_type == SimpleType("void") else "return"
-    for param in method.params:
-        if isinstance(param.type, PointerType) and not param.type.inner.const:
-            if isinstance(output, Parameter):
-                raise RuntimeError(
-                    "auto_wrap_method failed: multiple inferred output parameters"
-                )
-            output = param
     error_handling = "none"
     if method.return_type == SimpleType("bool"):
         error_handling = "return_false"
         if output == "return":
             output = "self"
+
+    for param in method.params:
+        if isinstance(param.type, PointerType) and not param.type.inner.const:
+            if output != "return":
+                raise ValueError("multiple inferred output parameters")
+            output = param
 
     wrap_method(
         pyclass,
@@ -472,6 +473,8 @@ number_mutating_methods_overrides = {
     "setToFloatingPoint": None,
     "intervalToPrecision": None,
     "mergeInterval": None,
+    "allroots": None,
+    "factorize": None,
 }
 
 for method in Number.underlying_type.members:
@@ -500,7 +503,28 @@ for method in Number.underlying_type.members:
     if mapped is None:
         continue
 
-    auto_wrap_method(Number, method, name=mapped)
+    try:
+        auto_wrap_method(Number, method, name=mapped)
+    except ValueError as e:
+        print(
+            f"warning: Number.{method.name} could not be automatically wrapped: {e}"
+        )
+
+allroots = Number.underlying_type.methods["allroots"]
+wrap_method(
+    Number,
+    allroots,
+    output=allroots.params[-1],
+    error_handling="return_false",
+)
+
+factorize = Number.underlying_type.methods["factorize"]
+wrap_method(
+    Number,
+    factorize,
+    output=factorize.params[-1],
+    error_handling="return_false",
+)
 
 
 number_constant_functions = ["e", "pi", "catalan", "euler"]

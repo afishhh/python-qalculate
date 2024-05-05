@@ -424,12 +424,14 @@ class PyClass:
                 seen_once.add(method.name)
 
         for method in self._methods:
+            has_self = method.receiver or method.name == "__init__"
+
             if method.name in overloaded:
                 types.write("@overload\n")
-            if method.receiver is None:
+            if not has_self:
                 types.write("@staticmethod\n")
+
             types.write(f"def {method.name}(")
-            has_self = method.receiver or method.name == "__init__"
             if has_self:
                 types.write("self")
             for parameter in method.parameters:
