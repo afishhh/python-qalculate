@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 import string
 from typing import Callable, Iterable, Literal, Sequence, TypeVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from .token import (
     Token,
@@ -80,6 +80,7 @@ def _parse_method(
 
 TType = TypeVar("TType", bound="Type")
 
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Type(ABC):
     const: bool = False
@@ -93,11 +94,7 @@ class Type(ABC):
         return type
 
     def remove_cv(self: TType) -> "TType":
-        return self.__class__(
-            **{slot: getattr(self, slot) for slot in self.__slots__},
-            const=False,
-            volatile=False,
-        )
+        return replace(self, const=False, volatile=False)
 
 
 @dataclass(frozen=True, slots=True)
