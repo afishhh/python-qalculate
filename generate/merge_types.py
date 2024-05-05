@@ -67,9 +67,6 @@ def merge_typing_files(lower: Path | str, upper: Path | str, context: PyContext)
                 return node
             return node
 
-    upper_module = ImplicitCasterVisitor().visit(upper_module)
-    assert isinstance(upper_module, ast.Module)
-
     lower_classes: dict[str, ast.ClassDef] = {}
     imported_aliases: set[tuple[str, str]] = set()
     imports: list[ast.alias] = [
@@ -112,5 +109,8 @@ def merge_typing_files(lower: Path | str, upper: Path | str, context: PyContext)
 
     header: list[ast.stmt] = [ast.Import(imports)]
     lower_module.body = header + new_body
+
+    lower_module = ImplicitCasterVisitor().visit(lower_module)
+    assert isinstance(upper_module, ast.Module)
 
     return ast.unparse(lower_module)

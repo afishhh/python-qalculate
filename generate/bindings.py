@@ -377,7 +377,7 @@ class PyClass:
 
         impl.dedent("}\n")
 
-    def write_types(self, types: IndentedWriter, context: "PyContext"):
+    def write_types(self, types: IndentedWriter, context: "PyContext", *, apply_implicit_casts: bool = False):
         types.write(f"class {self.name}(")
         for base in self._bases:
             types.write(base)
@@ -407,7 +407,9 @@ class PyClass:
 
             if writeable:
                 types.write(f"@{name}.setter\n")
-                param_type = context.apply_implicit_casts(return_type)
+                param_type = return_type
+                if apply_implicit_casts:
+                    param_type = context.apply_implicit_casts(param_type)
                 with types.indent(f"def {name}(self, value: {param_type}) -> None:\n"):
                     types.write("...\n")
 
@@ -437,7 +439,8 @@ class PyClass:
                     types.write("*")
                 else:
                     python_type = context.pythonize_cpp_type(parameter.type)
-                    python_type = context.apply_implicit_casts(python_type)
+                    if apply_implicit_casts:
+                        python_type = context.apply_implicit_casts(python_type)
                     types.write(f"{parameter.name}: {python_type}")
                     if parameter.default:
                         types.write(" = ...")

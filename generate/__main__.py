@@ -816,7 +816,7 @@ for pyclass in classes:
                 mode=mode,
             )
 
-    pyclass.write_types(typings, classes)
+    pyclass.write_types(typings, classes, apply_implicit_casts=False)
 
 with function_declaration("void add_builtin_functions(pybind11::module_ &m)"):
     for pyclass in builtin_function_classes:
@@ -834,7 +834,7 @@ types_output.write_text(
     merge_typing_files(
         typings._inner.getvalue(),
         Path(__file__).parent.parent / "src" / "types.pyi",
-        classes
+        classes,
     )
 )
 
