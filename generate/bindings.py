@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from io import StringIO
 from typing import Iterator, Literal, TypeAlias, overload
 
@@ -543,20 +543,14 @@ class PyContext:
 
     def _cpp_type_for_wrapper(self, type: Type) -> Type:
         if isinstance(type, PointerType):
-            return PointerType(
+            return replace(
+                type,
                 inner=self._cpp_type_for_wrapper(type.inner),
-                kind=type.kind,
-                const=type.const,
-                volatile=type.volatile,
             )
         elif isinstance(type, SimpleType):
             if type.name in self._classes:
-                pyclass = self._classes[type.name]
-                return SimpleType(
-                    name=pyclass.implementation_name,
-                    const=type.const,
-                    volatile=type.volatile,
-                )
+                name = self._classes[type.name].implementation_name
+                return replace(type, name=name)
         return type
 
     def cpp_type_for_wrapper(self, type: _CastableToType) -> Type:
