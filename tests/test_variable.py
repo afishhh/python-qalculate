@@ -19,7 +19,7 @@ load_global_variables()
         ("pi", "π"),
     ],
 )
-def test_builtin_variables(string: str, var_name: str):
+def test_builtin_variables(string: str, var_name: str) -> None:
     parsed = parse(string)
     assert isinstance(parsed, MathStructure.Variable)
     assert parsed.variable is Variable.get(var_name)

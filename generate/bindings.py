@@ -377,7 +377,13 @@ class PyClass:
 
         impl.dedent("}\n")
 
-    def write_types(self, types: IndentedWriter, context: "PyContext", *, apply_implicit_casts: bool = False):
+    def write_types(
+        self,
+        types: IndentedWriter,
+        context: "PyContext",
+        *,
+        apply_implicit_casts: bool = False,
+    ):
         types.write(f"class {self.name}(")
         for base in self._bases:
             types.write(base)
@@ -423,7 +429,7 @@ class PyClass:
             else:
                 seen_once.add(method.name)
 
-        for method in self._methods:
+        for method in sorted(self._methods, key=lambda x: x.name):
             has_self = method.receiver or method.name == "__init__"
 
             if method.name in overloaded:

@@ -49,7 +49,7 @@ from qalculate import (
         ),
     ],
 )
-def test_simple_parsing(string: str, expected: S | Callable[[], S]):
+def test_simple_parsing(string: str, expected: S | Callable[[], S]) -> None:
     if not isinstance(expected, S):
         expected = expected()
     assert parse(string) == expected
@@ -69,7 +69,7 @@ exact_options = EvaluationOptions(
         ("x² = 3", "x = 3^0.5 || x = (-1) * 3^0.5"),
     ],
 )
-def test_simple_equations(equation: str, expected: str):
+def test_simple_equations(equation: str, expected: str) -> None:
     assert parse(equation).calculate(exact_options).print() == expected
 
 
@@ -81,5 +81,5 @@ def test_simple_equations(equation: str, expected: str):
         ("log(512, 4)", S.Function(MF.get("log"), S.Number(512), S.Number(4))),
     ],
 )
-def test_function_parsing(string: str, expected: S):
+def test_function_parsing(string: str, expected: S) -> None:
     assert parse(string) == expected

@@ -4,13 +4,14 @@ import pytest
 
 
 def add_to_mathstructure(value: Any) -> q.MathStructure:
-    return q.MathStructure(0) / value
+    result = q.MathStructure(0) / value
+    assert isinstance(result, q.MathStructure)
+    return result
 
-@pytest.mark.parametrize(
-    "fun", [q.MathStructure, q.calculate, add_to_mathstructure]
-)
+
+@pytest.mark.parametrize("fun", [q.MathStructure, q.calculate, add_to_mathstructure])
 @pytest.mark.parametrize("value", [1, 1.0, 2 + 1j, [1 + 2j], [20, [10]]])
-def test_casts_to_mathstructure(fun: Callable[[Any], Any], value: Any):
+def test_casts_to_mathstructure(fun: Callable[[Any], Any], value: Any) -> None:
     if (
         fun in (q.calculate, add_to_mathstructure)
         and isinstance(value, list)
@@ -31,5 +32,5 @@ def test_casts_to_mathstructure(fun: Callable[[Any], Any], value: Any):
     ],
 )
 @pytest.mark.parametrize("value", [1, 1.0, 2 + 1j])
-def test_casts_to_number(fun: Callable[[Any], Any], value: Any):
+def test_casts_to_number(fun: Callable[[Any], Any], value: Any) -> None:
     fun(value)

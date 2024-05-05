@@ -14,7 +14,7 @@ load_global_units()
         (Unit, "deg"),
     ]
 )
-def test_same_instances(class_: type[ExpressionItem], name: str):
+def test_same_instances(class_: type[ExpressionItem], name: str) -> None:
     a = class_.get(name)
     b = class_.get(name)
     c = class_.get(name)
@@ -24,5 +24,5 @@ def test_same_instances(class_: type[ExpressionItem], name: str):
     assert a is c
     assert a is d
 
-def test_variable_proxy_compare():
+def test_variable_proxy_compare() -> None:
     assert parse("x") == parse("x")

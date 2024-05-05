@@ -5,13 +5,13 @@ from random import randint
 import math
 
 
-def test_small_conversion():
+def test_small_conversion() -> None:
     for _ in range(1000):
         value = randint(-(2**60), 2**60)
         assert int(Number(value)) == value
 
 
-def test_big_conversion():
+def test_big_conversion() -> None:
     for _ in range(1000):
         value = randint(-(2**100), 2**100)
         assert int(Number(value)) == value
@@ -33,8 +33,8 @@ def test_int_operations(
     num_op: Callable[[Number, Number], Number],
     int_op: Callable[[int, int], int],
     exp: bool,
-):
-    def test_one_op(a: int, b: int):
+) -> None:
+    def test_one_op(a: int, b: int) -> None:
         qa = Number(a)
         qb = Number(b)
 
@@ -68,7 +68,7 @@ comparison_test_values = [0, math.inf, -math.inf, 10, 300, 6728, 15632]
 @pytest.mark.parametrize(
     "op", ["__eq__", "__mul__", "__lt__", "__gt__", "__add__", "__sub__"]
 )
-def test_float_operations(a: int | float, b: int | float, op: str):
+def test_float_operations(a: int | float, b: int | float, op: str) -> None:
     if isinstance(a, int):
         a = float(a)
     if isinstance(b, int):

@@ -14,11 +14,16 @@ load_global_units()
         ("sm", S.Multiplication(S.Unit(Unit.get("second")), S.Unit(Unit.get("meter")))),
     ],
 )
-def test_unit_parsing(text: str, expected: S):
+def test_unit_parsing(text: str, expected: S) -> None:
     assert parse(text) == expected
 
 
-def test_unit_statics_same_instances():
-    assert Unit.DEGREE is parse("deg").unit
-    assert Unit.RADIAN is parse("rad").unit
-    assert Unit.GRADIAN is parse("gradian").unit
+def test_unit_statics_same_instances() -> None:
+    def parse_one(text: str) -> S.Unit:
+        x = parse(text)
+        assert isinstance(x, S.Unit)
+        return x
+
+    assert Unit.DEGREE is parse_one("deg").unit
+    assert Unit.RADIAN is parse_one("rad").unit
+    assert Unit.GRADIAN is parse_one("gradian").unit
