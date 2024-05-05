@@ -86,6 +86,7 @@ if(NOT USE_SYSTEM_LIBQALCULATE)
 		COMMAND
 			"${LIBQALCULATE_BUILD_DIR}/autogen.sh"
 			--disable-textport
+			--enable-compiled-definitions
 		WORKING_DIRECTORY "${LIBQALCULATE_BUILD_DIR}"
 		COMMENT "Configuring libqalculate"
 		VERBATIM
