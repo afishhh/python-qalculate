@@ -80,6 +80,7 @@ def _parse_method(
 
 TType = TypeVar("TType", bound="Type")
 
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Type(ABC):
     const: bool = False
@@ -93,11 +94,10 @@ class Type(ABC):
         return type
 
     def remove_cv(self: TType) -> "TType":
-        return self.__class__(
-            **{slot: getattr(self, slot) for slot in self.__slots__},
-            const=False,
-            volatile=False,
-        )
+        args = {slot: getattr(self, slot) for slot in self.__slots__}
+        args["const"] = False
+        args["volatile"] = False
+        return self.__class__(**args)
 
 
 @dataclass(frozen=True, slots=True)
