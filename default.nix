@@ -11,7 +11,7 @@
 
 # FIXME: AFAIK this is still not really a viable python package
 #        I think this has to be built for specific python versions instead?
-pkgs.stdenv.mkDerivation (self: {
+pkgs.llvmPackages_16.stdenv.mkDerivation (self: {
   pname = "qalculate";
   version = "0.0.1";
 
