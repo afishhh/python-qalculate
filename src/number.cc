@@ -42,6 +42,12 @@ py::int_ assert_and_steal_int(PyObject *object) {
   return py::reinterpret_steal<py::int_>(object);
 }
 
+#ifdef NDEBUG
+#define assert_kept(expr) expr
+#else
+#define assert_kept(expr) assert(expr)
+#endif
+
 py::int_ number_to_python_int(Number const &number) {
   if (!number.isInteger())
     throw py::value_error("Non-integer Number cannot be converted into an int");
@@ -59,13 +65,13 @@ py::int_ number_to_python_int(Number const &number) {
 
   Number current = number;
   if (current.isNegative())
-    assert(current.negate());
+    assert_kept(current.negate());
 
   while (current.isNonZero()) {
     Number tmp = current;
-    assert(tmp.bitAnd(mask));
+    assert_kept(tmp.bitAnd(mask));
     limbs.push_back(tmp.ulintValue());
-    assert(current.shiftRight(bits));
+    assert_kept(current.shiftRight(bits));
   }
 
   py::int_ pybits = assert_and_steal_int(PyLong_FromLong(bits));
