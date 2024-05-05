@@ -1,5 +1,6 @@
 #include "expression_items.hh"
 #include "generated.hh"
+#include "options.hh"
 #include "wrappers.hh"
 
 #include <libqalculate/ExpressionItem.h>
@@ -166,7 +167,7 @@ qalc_class_<MathFunction> add_math_function(py::module_ &m) {
             return MathStructureRef::construct(
                 self.calculate(vargs, (EvaluationOptions const &)options));
           },
-          py::arg("options") = PEvaluationOptions())
+          py::arg("options") = global_evaluation_options)
       .def("calculate", [](MathFunction &self, MathStructureVectorProxy &vargs,
                            PEvaluationOptions const &options) {
         return MathStructureRef::construct(self.calculate(
