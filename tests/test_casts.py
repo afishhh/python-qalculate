@@ -3,11 +3,16 @@ import qalculate as q
 import pytest
 
 
-@pytest.mark.parametrize("fun", [q.MathStructure, q.calculate])
+def add_to_mathstructure(value: Any) -> q.MathStructure:
+    return q.MathStructure(0) / value
+
+@pytest.mark.parametrize(
+    "fun", [q.MathStructure, q.calculate, add_to_mathstructure]
+)
 @pytest.mark.parametrize("value", [1, 1.0, 2 + 1j, [1 + 2j], [20, [10]]])
 def test_casts_to_mathstructure(fun: Callable[[Any], Any], value: Any):
     if (
-        fun == q.calculate
+        fun in (q.calculate, add_to_mathstructure)
         and isinstance(value, list)
         and any(isinstance(el, list) for el in value)
     ):
