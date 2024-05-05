@@ -15,17 +15,15 @@ if(USE_SYSTEM_LIBQALCULATE)
 	find_package(PkgConfig REQUIRED)
 	pkg_check_modules(LIBQALCULATE REQUIRED IMPORTED_TARGET libqalculate)
 	add_library(libqalculate ALIAS PkgConfig::LIBQALCULATE)
-
-	if(NOT LIBQALCULATE_FOUND)
-		message(
-			FATAL_ERROR
-			"libqalculate not found via pkg-config"
-			"Set USE_SYSTEM_LIBQALCULATE to OFF or install libqalculate"
-		)
-	endif()
-
 	set(LIBQALCULATE_CLONE_REF "v${LIBQALCULATE_VERSION}")
 else()
+	if(NOT "${CMAKE_GENERATOR}" STREQUAL "Unix Makefiles")
+		message(
+			FATAL_ERROR
+			"Building libqalculate is only supported with the \"Unix Makefiles\" generator.\n"
+			"Current: ${CMAKE_GENERATOR}"
+		)
+	endif()
 	# TODO: Once fixes for the bugs I found are in a release set this to a proper
 	#				version in CMakeLists.txt
 	set(LIBQALCULATE_CLONE_REF "master")
@@ -103,7 +101,7 @@ if(NOT USE_SYSTEM_LIBQALCULATE)
 
 	add_custom_command(
 		OUTPUT "${LIBQALCULATE_SO}"
-		COMMAND make
+		COMMAND "$(MAKE)"
 		WORKING_DIRECTORY "${LIBQALCULATE_BUILD_DIR}"
 		DEPENDS
 			"${LIBQALCULATE_BUILD_DIR}/Makefile"
@@ -122,6 +120,6 @@ if(NOT USE_SYSTEM_LIBQALCULATE)
 	set_target_properties(
 		libqalculate PROPERTIES
 		IMPORTED_LOCATION "${LIBQALCULATE_SO}"
-		INTERFACE_INCLUDE_DIRECTORIES "${LIBQALCULATE_BUILD_DIR}/libqalculate"
+		INTERFACE_INCLUDE_DIRECTORIES "${LIBQALCULATE_BUILD_DIR}"
 	)
 endif()
