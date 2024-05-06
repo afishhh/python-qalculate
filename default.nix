@@ -1,59 +1,57 @@
-{ pkgs
+{ lib
 
+, llvmPackages_16
 , pkg-config
 , cmake
-, python3
-, python3Packages
+
+, buildPythonPackage
+, pytest
+, pybind11
 , libqalculate
 
 , ...
 }:
 
-# FIXME: AFAIK this is still not really a viable python package
-#        I think this has to be built for specific python versions instead?
-pkgs.llvmPackages_16.stdenv.mkDerivation (self: {
+buildPythonPackage rec {
   pname = "qalculate";
   version = "0.0.1";
 
-  src = ./.;
+  inherit (llvmPackages_16) stdenv;
+  format = "other";
+
+  src = builtins.path {
+    name = "python-qalculate-src";
+    path = ./.;
+    filter = path: type:
+      let
+        relative = lib.removePrefix "${builtins.toString ./.}/" path;
+        filtered = [
+          "src.*"
+          "generate.*"
+          "cmake.*"
+          "CMakeLists.txt"
+        ];
+      in
+      builtins.any (pattern: builtins.match pattern relative != null) filtered;
+  };
 
   nativeBuildInputs = [
     pkg-config
     cmake
-    python3
-
-    (python3Packages.buildPythonApplication {
-      pname = "pybind11-stubgen";
-      version = "2.5.1";
-      src = builtins.fetchTree {
-        type = "github";
-        owner = "sizmailov";
-        repo = "pybind11-stubgen";
-        rev = "cf58aa6c7f0655c2f830b6964aa48baff868b891";
-      };
-      dontWrapPythonPrograms = true;
-    })
-
-    python3Packages.pytest
+    pytest
   ];
 
   buildInputs = [
     libqalculate
-
-    (python3Packages.pybind11.overrideAttrs (old: {
-      src = builtins.fetchTree {
-        type = "github";
-        owner = "pybind";
-        repo = "pybind11";
-        rev = "3e9dfa2866941655c56877882565e7577de6fc7b";
-      };
-    }))
+    pybind11
   ];
 
-  LIBQALCULATE_SOURCE_PATH = "${pkgs.libqalculate.src}";
+  LIBQALCULATE_SOURCE_PATH = "${libqalculate.src}";
 
   installPhase = ''
-    mkdir -p "$out/lib/python3.11"
-    cp -r qalculate-${self.version}-cp311-cp311-linux_x86_64 "$out/lib/python3.11/site-packages"
+    python_version=$(python3 -c "print(__import__('sysconfig').get_python_version())")
+    python_version2=$(python3 -c 'print("'"$python_version"'".replace(".", ""))')
+    mkdir -p "$out/lib/python$python_version"
+    cp -r "qalculate-${version}-cp''${python_version2}-cp''${python_version2}-linux_x86_64" "$out/lib/python$python_version/site-packages"
   '';
-})
+}
