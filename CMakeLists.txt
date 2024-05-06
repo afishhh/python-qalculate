@@ -5,6 +5,13 @@ project(
 	VERSION 0.0.1
 )
 
+if(CMAKE_COMPILER_IS_GNUCXX AND NOT (CMAKE_BUILD_TYPE STREQUAL "Debug"))
+	message(
+		WARNING
+		"You are using the GNU compiler and compiling with optimizations, this configuration is known to be broken, expect issues!"
+	)
+endif()
+
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/BuildWheel.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/Qalculate.cmake")
 
