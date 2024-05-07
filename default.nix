@@ -1,6 +1,5 @@
 { lib
 
-, llvmPackages_16
 , pkg-config
 , cmake
 
@@ -15,8 +14,6 @@
 buildPythonPackage rec {
   pname = "qalculate";
   version = "0.0.1";
-
-  inherit (llvmPackages_16) stdenv;
   format = "other";
 
   src = builtins.path {

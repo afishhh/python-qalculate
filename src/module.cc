@@ -1,6 +1,9 @@
 #include <cassert>
 #include <complex>
 #include <libqalculate/qalculate.h>
+
+#include "pybind.hh"
+
 #include <pybind11/attr.h>
 #include <pybind11/cast.h>
 #include <pybind11/complex.h>
@@ -16,7 +19,6 @@
 #include "number.hh"
 #include "options.hh"
 #include "proxies.hh"
-#include "pybind.hh"
 #include "ref.hh"
 #include "wrappers.hh"
 

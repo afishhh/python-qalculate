@@ -1,8 +1,8 @@
 #pragma once
 
+#include "pybind.hh"
 #include <libqalculate/MathStructure.h>
 #include <libqalculate/Variable.h>
-#include <pybind11/pybind11.h>
 
 template <typename T, class = void> struct QalcStructureInfo {};
 

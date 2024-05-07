@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import sys
 
 from generate.bindings import KW_ONLY, PyClass, PyContext
+from generate.lint import lint_cpp
 from generate.merge_types import merge_typing_files
 from generate.output import OutputDirectory
 
@@ -863,3 +864,10 @@ types_output.write_text(
 )
 
 output_directory.close()
+
+source_directory = Path(__file__).parent.parent / "src"
+success = True
+for file in source_directory.glob("*.[ch][ch]"):
+    success &= lint_cpp(file.read_text(), str(file.relative_to(source_directory)))
+if not success:
+    exit(1)

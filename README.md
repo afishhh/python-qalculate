@@ -7,11 +7,6 @@
 
 ## Building
 
-> [!WARNING]
-> For reasons unknown to me, GCC seems to "optimize" out important code and completely breaks the library when built with optimizations!!!
->
-> Until I find out why it's doing this it is recommended to use the clang compiler instead.
-
 ### Debian and derivatives
 
 #### Dependencies

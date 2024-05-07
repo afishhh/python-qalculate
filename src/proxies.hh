@@ -1,5 +1,6 @@
 #pragma once
 
+#include "pybind.hh"
 #include <cassert>
 #include <complex>
 #include <concepts>

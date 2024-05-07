@@ -1,6 +1,7 @@
 #include "expression_items.hh"
 #include "generated.hh"
 #include "options.hh"
+#include "pybind.hh"
 #include "wrappers.hh"
 
 #include <libqalculate/ExpressionItem.h>
