@@ -350,7 +350,7 @@ public:
 
   void repr(std::string &output) const {
     output += "MathStructure.Unit(unit=";
-    output += py::cast(this->unit()).attr("repr")().cast<std::string_view>();
+    output += py::cast(this->unit()).attr("__repr__")().cast<std::string_view>();
     output += ")";
   }
 };
