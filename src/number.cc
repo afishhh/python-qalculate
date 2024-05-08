@@ -31,7 +31,7 @@ Number number_from_python_int(py::int_ value) {
     return long_value;
 }
 
-Number number_from_complex(std::complex<long double> complex) {
+Number number_from_complex(std::complex<double> complex) {
   Number result(complex.real());
   result.setImaginaryPart(complex.imag());
   return result;

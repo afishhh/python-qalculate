@@ -32,6 +32,10 @@ MathStructureRef calculate(MathStructure const &mstruct,
   return MathStructureRef::adopt(result);
 }
 
+template <typename T> bool py_check(py::handle h) {
+  return py::type::of(h).is(py::type::of<T>());
+}
+
 PYBIND11_MODULE(qalculate, m) {
   m.doc() = "Python bindings for libqalculate";
 
@@ -76,7 +80,7 @@ PYBIND11_MODULE(qalculate, m) {
           .def(py::init<>())
           .def(py::init(&number_from_python_int))
           .def(py::init(&number_from_complex))
-          .def(py::init([](long double value) {
+          .def(py::init([](double value) {
             Number number;
             if (value == INFINITY)
               number.setPlusInfinity();
@@ -130,13 +134,9 @@ PYBIND11_MODULE(qalculate, m) {
               },
               py::is_operator{}));
 
-  py::implicitly_convertible<long double, Number>();
-  py::implicitly_convertible<std::complex<long double>, Number>();
+  py::implicitly_convertible<double, Number>();
+  py::implicitly_convertible<std::complex<double>, Number>();
   py::implicitly_convertible<py::int_, Number>();
-
-#define DEF_PROXY_CONVERSION(from_type, proxy)                                 \
-  def(py::init(                                                                \
-      [](from_type value) { return MathStructureRef(new proxy(value)); }))
 
   auto math_structure_cls =
       qalc_class_<MathStructure>(m, "MathStructure", py::is_final{});
@@ -155,25 +155,51 @@ PYBIND11_MODULE(qalculate, m) {
   add_unit(m);
 
   py::implicitly_convertible<py::int_, MathStructure>();
-  py::implicitly_convertible<long double, MathStructure>();
-  py::implicitly_convertible<std::complex<long double>, MathStructure>();
+  py::implicitly_convertible<double, MathStructure>();
+  py::implicitly_convertible<std::complex<double>, MathStructure>();
   py::implicitly_convertible<py::list, MathStructure>();
+  py::implicitly_convertible<Number, MathStructure>();
   py::implicitly_convertible<Variable, MathStructure>();
   py::implicitly_convertible<MathFunction, MathStructure>();
+
+#define NEW_PROXY_CONVERSION(check, ctor_type, proxy)                          \
+  if (args.size() == 1 && check(args[0].ptr()))                                \
+    return MathStructureRef(new proxy(args[0].cast<ctor_type>()));
 
   // FIXME: Clean this up finally...
   add_math_structure_proxies(init_math_structure_children(
       m, init_auto_math_structure(
              math_structure_cls
-                 .DEF_PROXY_CONVERSION(py::int_, MathStructureNumberProxy)
-                 .DEF_PROXY_CONVERSION(long double, MathStructureNumberProxy)
-                 .DEF_PROXY_CONVERSION(std::complex<long double>,
-                                       MathStructureNumberProxy)
-                 .DEF_PROXY_CONVERSION(py::list, MathStructureVectorProxy)
-                 .DEF_PROXY_CONVERSION(QalcRef<Variable>,
-                                       MathStructureVariableProxy)
-                 .DEF_PROXY_CONVERSION(QalcRef<MathFunction>,
-                                       MathStructureFunctionProxy)
+                 .def_static(
+                     "__new__",
+                     [](py::type cls, py::args args) {
+                       if (cls.is(py::type::of<MathStructure>())) {
+                         NEW_PROXY_CONVERSION(py::int_::check_, py::int_,
+                                              MathStructureNumberProxy);
+                         NEW_PROXY_CONVERSION(py::float_::check_, double,
+                                              MathStructureNumberProxy);
+                         NEW_PROXY_CONVERSION(PyComplex_Check,
+                                              std::complex<double>,
+                                              MathStructureNumberProxy);
+                         NEW_PROXY_CONVERSION(py_check<Number>, Number,
+                                              MathStructureNumberProxy);
+                         NEW_PROXY_CONVERSION(py::sequence::check_,
+                                              py::sequence,
+                                              MathStructureVectorProxy);
+                         NEW_PROXY_CONVERSION(py_check<Variable>,
+                                              QalcRef<Variable>,
+                                              MathStructureVariableProxy);
+                         NEW_PROXY_CONVERSION(py_check<MathFunction>,
+                                              QalcRef<MathFunction>,
+                                              MathStructureFunctionProxy);
+                         throw py::type_error(
+                             "Invalid MathStructure.__new__ call");
+                       } else
+                         throw py::type_error(
+                             "MathStructure.__new__ called with unsupported "
+                             "type " +
+                             cls.attr("__repr__")().cast<std::string>());
+                     })
 
                  .def("compare", &MathStructure::compare)
                  .def("compare_approximately",

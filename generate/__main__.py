@@ -73,7 +73,7 @@ classes.add_implcit_cast("complex", "Number")
 classes.add_implcit_cast("int", "MathStructure")
 classes.add_implcit_cast("float", "MathStructure")
 classes.add_implcit_cast("complex", "MathStructure")
-classes.add_implcit_cast("list[MathStructure]", "MathStructure")
+classes.add_implcit_cast("Sequence[MathStructure]", "MathStructure")
 classes.add_implcit_cast("Variable", "MathStructure")
 classes.add_implcit_cast("MathFunction", "MathStructure")
 
