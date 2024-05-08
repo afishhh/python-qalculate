@@ -227,7 +227,7 @@ class MathStructureGenericOperationProxy
 public:
   MathStructureGenericOperationProxy() { this->m_type = Self::TYPE; }
 
-  MathStructureGenericOperationProxy(py::args args)
+  MathStructureGenericOperationProxy(py::sequence args)
       : MathStructureGenericOperationProxy() {
     for (auto value : args) {
       auto structure = value.cast<MathStructureRef>();
@@ -236,7 +236,7 @@ public:
   }
 
   static void _init(qalc_class_<Self, MathStructureSequence> &c) {
-    static_new<py::args>(c);
+    static_new<py::sequence>(c);
   }
 
   void repr(std::string &output) const {
