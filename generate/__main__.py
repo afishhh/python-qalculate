@@ -507,9 +507,7 @@ for method in Number.underlying_type.members:
     try:
         auto_wrap_method(Number, method, name=mapped)
     except ValueError as e:
-        print(
-            f"warning: Number.{method.name} could not be automatically wrapped: {e}"
-        )
+        print(f"warning: Number.{method.name} could not be automatically wrapped: {e}")
 
 allroots = Number.underlying_type.methods["allroots"]
 wrap_method(
@@ -592,6 +590,7 @@ properties_for(
                 "last",
                 "countChildren",
                 "refcount",
+                "matrixIsSquare",
                 "isAborted",
                 "rows",
                 "size",

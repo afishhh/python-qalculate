@@ -111,10 +111,9 @@ PYBIND11_MODULE(qalculate, m) {
               py::arg("options") = &global_print_options, py::pos_only{},
               py::is_operator{})
 
-          .def("__int__",
-               [](Number const &self) -> py::int_ {
-                 return number_to_python_int(self);
-               })
+          .def("__int__", number_to_python_int)
+          .def("__float__", number_to_python_float)
+          .def("__complex__", number_to_python_complex)
 
           .def(
               "__repr__",

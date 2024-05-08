@@ -86,6 +86,39 @@ init_math_structure_children(py::module_ &,
             return &self[idx];
           },
           py::is_operator{})
+      .def(
+          "__getitem__",
+          [](MathStructure const &self, py::slice slice) {
+            auto wrap_index = [self](ssize_t x) -> size_t {
+              if (x < 0)
+                return self.size() + -(-x % self.size());
+              return x;
+            };
+
+            auto start = wrap_index(slice.attr("start").cast<ssize_t>());
+            auto stop = wrap_index(slice.attr("stop").cast<ssize_t>());
+            ssize_t step = 1;
+            if (auto step_obj = slice.attr("step"); !step_obj.is_none())
+              step = step_obj.cast<ssize_t>();
+            bool reverse = stop < start;
+
+            if (reverse && step > 0)
+              return py::list{};
+            else if (!reverse && step < -1)
+              return py::list{};
+            else if (step == 0)
+              throw py::value_error("slice step cannot be zero");
+
+            if (start >= self.size() || stop >= self.size())
+              throw py::index_error{};
+
+            py::list result;
+            for (ssize_t i = start;
+                 reverse ? i > (ssize_t)stop : i < (ssize_t)stop; i += step)
+              result.append(&self[i]);
+            return result;
+          },
+          py::is_operator{})
 
       .def(
           "__len__", [](MathStructure const &self) { return self.size(); },
@@ -126,8 +159,24 @@ public:
         .def_property("value",
                       (Number & (MathStructure ::*)()) & MathStructure::number,
                       [](MathStructureNumberProxy &self, Number const &value) {
-                        self.number().set(value);
+                        self.o_number.set(value);
                       })
+
+        .def("__int__",
+             [](MathStructureNumberProxy &self) {
+               return number_to_python_int(self.o_number);
+             })
+
+        .def("__float__",
+             [](MathStructureNumberProxy &self) {
+               return number_to_python_float(self.o_number);
+             })
+
+        .def("__complex__",
+             [](MathStructureNumberProxy &self) {
+               return number_to_python_complex(self.o_number);
+             })
+
         .def(
             "__repr__",
             [](MathStructure const &self) {
@@ -350,7 +399,8 @@ public:
 
   void repr(std::string &output) const {
     output += "MathStructure.Unit(unit=";
-    output += py::cast(this->unit()).attr("__repr__")().cast<std::string_view>();
+    output +=
+        py::cast(this->unit()).attr("__repr__")().cast<std::string_view>();
     output += ")";
   }
 };

@@ -93,3 +93,17 @@ py::int_ number_to_python_int(Number const &number) {
 
   return result;
 }
+
+py::float_ number_to_python_float(Number const &number) {
+  if (!number.isFloatingPoint())
+    throw py::value_error{};
+  return number.floatValue();
+}
+
+py::object number_to_python_complex(Number const &number) {
+  if (!number.isComplex() || !number.isFloatingPoint() ||
+      !number.imaginaryPart().isFloatingPoint())
+    throw py::value_error{};
+  return py::cast(
+      std::complex(number.floatValue(), number.imaginaryPart().floatValue()));
+}

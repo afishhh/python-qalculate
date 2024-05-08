@@ -83,3 +83,38 @@ def test_simple_equations(equation: str, expected: str) -> None:
 )
 def test_function_parsing(string: str, expected: S) -> None:
     assert parse(string) == expected
+
+
+@pytest.mark.parametrize(
+    "slice",
+    [
+        slice(1, 2),
+        slice(2, 1, -1),
+        slice(2, 1, -2),
+        slice(2, 1, -3),
+        slice(22, 1, -1),
+        slice(21, 1, -2),
+        slice(20, 1, -3),
+        slice(1, 19),
+        slice(1, 30),
+        slice(-80, -40),
+        slice(-40, -80, -2),
+        slice(-40, -80),
+        slice(50, 20),
+        slice(50, 50),
+        slice(76, 55),
+        slice(6, 81),
+        slice(28, 57),
+        slice(47, 47),
+        slice(89, 86),
+        slice(77, 83),
+        slice(35, 99),
+        slice(83, 51),
+        slice(16, 1),
+        slice(96, 56),
+    ],
+)
+def test_slicing(slice: slice) -> None:
+    ints = [*range(100)]
+    structures = S(ints)
+    assert ints[slice] == list(map(int, structures[slice]))
