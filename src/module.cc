@@ -163,66 +163,70 @@ PYBIND11_MODULE(qalculate, m) {
   py::implicitly_convertible<MathFunction, MathStructure>();
 
 #define NEW_PROXY_CONVERSION(check, ctor_type, proxy)                          \
-  if (args.size() == 1 && check(args[0].ptr()))                                \
+  if (check(args[0].ptr()))                                                    \
     return MathStructureRef(new proxy(args[0].cast<ctor_type>()));
 
   // FIXME: Clean this up finally...
   add_math_structure_proxies(init_math_structure_children(
-      m, init_auto_math_structure(
-             math_structure_cls
-                 .def_static(
-                     "__new__",
-                     [](py::type cls, py::args args) {
-                       if (cls.is(py::type::of<MathStructure>())) {
-                         NEW_PROXY_CONVERSION(py::int_::check_, py::int_,
-                                              MathStructureNumberProxy);
-                         NEW_PROXY_CONVERSION(py::float_::check_, double,
-                                              MathStructureNumberProxy);
-                         NEW_PROXY_CONVERSION(PyComplex_Check,
-                                              std::complex<double>,
-                                              MathStructureNumberProxy);
-                         NEW_PROXY_CONVERSION(py_check<Number>, Number,
-                                              MathStructureNumberProxy);
-                         NEW_PROXY_CONVERSION(py::sequence::check_,
-                                              py::sequence,
-                                              MathStructureVectorProxy);
-                         NEW_PROXY_CONVERSION(py_check<Variable>,
-                                              QalcRef<Variable>,
-                                              MathStructureVariableProxy);
-                         NEW_PROXY_CONVERSION(py_check<MathFunction>,
-                                              QalcRef<MathFunction>,
-                                              MathStructureFunctionProxy);
-                         throw py::type_error(
-                             "Invalid MathStructure.__new__ call");
-                       } else
-                         throw py::type_error(
-                             "MathStructure.__new__ called with unsupported "
-                             "type " +
-                             cls.attr("__repr__")().cast<std::string>());
-                     })
+      m,
+      init_auto_math_structure(
+          math_structure_cls
+              .def_static(
+                  "__new__",
+                  [](py::type cls, py::args args) {
+                    if (cls.is(py::type::of<MathStructure>())) {
+                      if (args.size() == 1) {
+                        NEW_PROXY_CONVERSION(py::int_::check_, py::int_,
+                                             MathStructureNumberProxy);
+                        NEW_PROXY_CONVERSION(py::float_::check_, double,
+                                             MathStructureNumberProxy);
+                        NEW_PROXY_CONVERSION(PyComplex_Check,
+                                             std::complex<double>,
+                                             MathStructureNumberProxy);
+                        NEW_PROXY_CONVERSION(py_check<Number>, Number,
+                                             MathStructureNumberProxy);
+                        NEW_PROXY_CONVERSION(py::sequence::check_, py::sequence,
+                                             MathStructureVectorProxy);
+                        NEW_PROXY_CONVERSION(py_check<Variable>,
+                                             QalcRef<Variable>,
+                                             MathStructureVariableProxy);
+                        NEW_PROXY_CONVERSION(py_check<MathFunction>,
+                                             QalcRef<MathFunction>,
+                                             MathStructureFunctionProxy);
+                        throw py::type_error(
+                            py::str(py::type::of(args[0])).cast<std::string>() +
+                            " cannot be cast to a MathStructure");
+                      }
+                      throw py::type_error(
+                          "MathStructure() must be called with "
+                          "exactly one argument");
+                    } else
+                      throw py::type_error("MathStructure.__new__ must be "
+                                           "called with MathStructure as cls");
+                  })
 
-                 .def("compare", &MathStructure::compare)
-                 .def("compare_approximately",
-                      &MathStructure::compareApproximately)
+              .def("compare", &MathStructure::compare)
+              .def("compare_approximately",
+                   &MathStructure::compareApproximately)
 
-                 .def("calculate", &calculate,
-                      py::arg("options") = &global_evaluation_options,
-                      py::arg("to") = "")
+              .def("calculate", &calculate,
+                   py::arg("options") = &global_evaluation_options,
+                   py::arg("to") = "")
 
-                 .def(
-                     "print",
-                     [](MathStructure &s, PrintOptions const &options) {
-                       return s.print(options);
-                     },
-                     py::arg("options") = &global_print_options)
+              .def(
+                  "print",
+                  [](MathStructure &s, PrintOptions const &options) {
+                    return s.print(options);
+                  },
+                  py::arg("options") = &global_print_options)
 
-                 .def(
-                     "__eq__",
-                     [](MathStructure const &self, MathStructure const &other) {
-                       // Compare infinities as equal by default
-                       return self.equals(other, false, true);
-                     },
-                     py::is_operator{}))));
+              .def(
+                  "__eq__",
+                  [](MathStructure const &self, MathStructure const &other) {
+                    // Compare infinities as equal by default
+                    return self.equals(other, false, true);
+                  },
+                  py::is_operator{}))));
 
   number.def(py::init([](MathStructureNumberProxy const &structure) {
     return structure.number();
