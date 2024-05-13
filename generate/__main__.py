@@ -79,6 +79,118 @@ classes.add_implcit_cast("MathFunction", "MathStructure")
 
 class_extra_impl: dict[PyClass, str] = {}
 
+def wrap_method(
+    pyclass: PyClass,
+    method: Struct.Method,
+    name: str | None = None,
+    output: Literal["return", "self"] | Parameter = "return",
+    error_handling: Literal["return_false", "none"] = "none",
+    copy_self: bool | None = None,
+):
+    if name is None:
+        name = method.name
+
+    if output == "self":
+        output_type = pyclass.implementation_name
+        if copy_self is None:
+            copy_self = True
+    elif output == "return":
+        output_type = method.return_type
+        assert error_handling != "return_false"
+    else:
+        assert isinstance(output.type, PointerType)
+        output_type = output.type.inner
+    if copy_self is None:
+        copy_self = not method.const
+
+    input_params: list[Parameter] = []
+    for param in method.params:
+        if method.variadic:
+            raise NotImplementedError("Wrapping variadic methods is not supported yet")
+        elif param is not output:
+            input_params.append(
+                Parameter(
+                    type=classes.cpp_type_for_wrapper(param.type),
+                    name=param.name,
+                    default=param.default,
+                )
+            )
+
+    with pyclass.method(
+        output_type, name, *input_params, docstring=method.docstring
+    ) as body:
+        self_name = "self"
+        if copy_self:
+            body.write(f"{pyclass.implementation_name} _tmp = {self_name};\n")
+            self_name = "_tmp"
+
+        if isinstance(output, Parameter):
+            body.write(f"{output_type} {output.name};\n")
+
+        args = ", ".join(
+            param.name
+            for param in method.params
+            if isinstance(param, Parameter) and param.name
+        )
+        call_expr = f"{self_name}.{method.name}({args})"
+
+        if error_handling == "return_false":
+            with body.indent(f"if(!{call_expr})\n"):
+                body.write(f'throw pybind11::value_error("Operation failed");\n')
+        elif output == "return":
+            body.write(f"return {call_expr};\n")
+        else:
+            body.write(f"{call_expr};\n")
+
+        if output == "self":
+            body.write(f"return {self_name};\n")
+        elif isinstance(output, Parameter):
+            body.write(f"return {output.name};\n")
+
+
+def auto_wrap_method(pyclass: PyClass, method: Struct.Method, name: str | None = None):
+    output = "self" if method.return_type == SimpleType("void") else "return"
+    error_handling = "none"
+    if method.return_type == SimpleType("bool"):
+        error_handling = "return_false"
+        if output == "return":
+            output = "self"
+
+    for param in method.params:
+        if isinstance(param.type, PointerType) and not param.type.inner.const:
+            if output != "return":
+                raise ValueError("multiple inferred output parameters")
+            output = param
+
+    wrap_method(
+        pyclass,
+        method,
+        name=name,
+        output=output,
+        error_handling=error_handling,
+        copy_self=not method.const,
+    )
+
+
+def auto_wrap_property(
+    pyclass: PyClass,
+    getter: Struct.Method | str,
+    setter: Struct.Method | str | None = None,
+    /,
+    name: str | None = None,
+):
+    if isinstance(getter, str):
+        getter = pyclass.underlying_type.methods[getter]
+    if isinstance(setter, str):
+        setter = pyclass.underlying_type.methods[setter]
+    if name is None:
+        name = camel_to_snake(getter.name)
+
+    prop = pyclass.property(name, docstring=getter.docstring)
+    prop.getter(f"&{pyclass.underlying_name}::{getter.name}", type=getter.return_type)
+    if setter is not None:
+        prop.setter(f"&{pyclass.underlying_name}::{setter.name}", param_type=setter.params[0].type)
+
 header.write(
     """
 #pragma once
@@ -123,6 +235,7 @@ def properties_for(
     allow_readwrite: bool = False,
     require_getter_const: bool = True,
     renames: dict[str, str | None] = {},
+    renames_is_whitelist: bool = False,
     extra_for_repr: Iterable[str] = [],
     add_repr_from_rw: bool = False,
 ):
@@ -130,22 +243,22 @@ def properties_for(
     added_rw_props = list(extra_for_repr)
 
     for member in iter_properties(struct, require_getter_const=require_getter_const):
-        mapped = renames.get(member.name, camel_to_snake(member.name))
+        mapped = renames.get(
+            member.name,
+            camel_to_snake(member.name) if not renames_is_whitelist else None,
+        )
         if mapped is None:
             continue
 
-        setter = struct.methods.get(f"set{camel_to_pascal(member.name)}", None)
+        if allow_readwrite:
+            setter = struct.methods.get(f"set{camel_to_pascal(member.name)}", None)
+            if setter and (len(setter.params) != 1 or setter.variadic):
+                setter = None
+        else:
+            setter = None
 
-        property = pyclass.property(mapped, docstring=member.docstring)
-        property.getter(
-            f"&{pyclass.underlying_name}::{member.name}", type=member.return_type
-        )
-        if setter and len(setter.params) == 1 and allow_readwrite:
-            assert not setter.variadic
-            property.setter(
-                f"&{pyclass.underlying_name}::{setter.name}",
-                param_type=setter.params[0].type,
-            )
+        auto_wrap_property(pyclass, member, setter, name=mapped)
+        if setter:
             added_rw_props.append(mapped)
 
     if add_repr_from_rw:
@@ -345,11 +458,13 @@ properties_for(
         "integer": None,
         "getBoolean": None,
         "internalType": None,
+        "internalImaginary": None,
         "internalRational": None,
         "internalLowerFloat": None,
         "internalUpperFloat": None,
     },
 )
+auto_wrap_property(Number, "isInteger")
 
 number_operators = [
     ("Number", "multiply", "__mul__"),
@@ -373,99 +488,6 @@ for ret, cpp_function, py_op in number_operators:
             body.write("return result;\n")
         else:
             body.write(f"return self.{cpp_function}(other);\n")
-
-
-def wrap_method(
-    pyclass: PyClass,
-    method: Struct.Method,
-    name: str | None = None,
-    output: Literal["return", "self"] | Parameter = "return",
-    error_handling: Literal["return_false", "none"] = "none",
-    copy_self: bool | None = None,
-):
-    if name is None:
-        name = method.name
-
-    if output == "self":
-        output_type = pyclass.implementation_name
-        if copy_self is None:
-            copy_self = True
-    elif output == "return":
-        output_type = method.return_type
-        assert error_handling != "return_false"
-    else:
-        assert isinstance(output.type, PointerType)
-        output_type = output.type.inner
-    if copy_self is None:
-        copy_self = not method.const
-
-    input_params: list[Parameter] = []
-    for param in method.params:
-        if method.variadic:
-            raise NotImplementedError("Wrapping variadic methods is not supported yet")
-        elif param is not output:
-            input_params.append(
-                Parameter(
-                    type=classes.cpp_type_for_wrapper(param.type),
-                    name=param.name,
-                    default=param.default,
-                )
-            )
-
-    with pyclass.method(
-        output_type, name, *input_params, docstring=method.docstring
-    ) as body:
-        self_name = "self"
-        if copy_self:
-            body.write(f"{pyclass.implementation_name} _tmp = {self_name};\n")
-            self_name = "_tmp"
-
-        if isinstance(output, Parameter):
-            body.write(f"{output_type} {output.name};\n")
-
-        args = ", ".join(
-            param.name
-            for param in method.params
-            if isinstance(param, Parameter) and param.name
-        )
-        call_expr = f"{self_name}.{method.name}({args})"
-
-        if error_handling == "return_false":
-            with body.indent(f"if(!{call_expr})\n"):
-                body.write(f'throw pybind11::value_error("Operation failed");\n')
-        elif output == "return":
-            body.write(f"return {call_expr};\n")
-        else:
-            body.write(f"{call_expr};\n")
-
-        if output == "self":
-            body.write(f"return {self_name};\n")
-        elif isinstance(output, Parameter):
-            body.write(f"return {output.name};\n")
-
-
-def auto_wrap_method(pyclass: PyClass, method: Struct.Method, name: str | None = None):
-    output = "self" if method.return_type == SimpleType("void") else "return"
-    error_handling = "none"
-    if method.return_type == SimpleType("bool"):
-        error_handling = "return_false"
-        if output == "return":
-            output = "self"
-
-    for param in method.params:
-        if isinstance(param.type, PointerType) and not param.type.inner.const:
-            if output != "return":
-                raise ValueError("multiple inferred output parameters")
-            output = param
-
-    wrap_method(
-        pyclass,
-        method,
-        name=name,
-        output=output,
-        error_handling=error_handling,
-        copy_self=not method.const,
-    )
 
 
 number_mutating_methods_overrides = {
@@ -569,36 +591,25 @@ structure_types.remove("ABORTED")
 properties_for(
     classes["MathStructure"],
     renames={
-        # Remove type-specific checks (use isinstance instead)
-        **{f"is{snake_to_pascal(name)}": None for name in structure_types},
-        **{f"is{snake_to_pascal(name)}_exp": None for name in structure_types},
-        # Type-specific getters
-        **{f"{snake_to_camel(name)}": None for name in structure_types},
-        **{
-            f: None
-            for f in (
-                "prefix",
-                "unit_exp_prefix",
-                "isDateTime",
-                "find_x_var",
-                "isMatrix",
-                "symbol",
-                "number",
-                "function_value",
-                "unit_exp_unit",
-                "isPlural",
-                "last",
-                "countChildren",
-                "refcount",
-                "matrixIsSquare",
-                "isAborted",
-                "rows",
-                "size",
-                "type",
-                "comparisonType",
-            )
-        },
+        name: camel_to_snake(name)
+        for name in (
+            "isEmptySymbol",
+            "isInfinity"
+            "isInteger"
+            "isZero"
+            "isApproximatelyZero"
+            "isOne"
+            "isMinusOne"
+            "isApproximate",
+            "precision",
+            "containsOpaqueContents",
+            "containsAdditionPower",
+            "containsUnknowns",
+            "containsDivison",
+            "in_parenthesis",
+        )
     },
+    renames_is_whitelist=True,
 )
 
 
@@ -705,7 +716,9 @@ with function_declaration(
         impl.write(
             f'qalc_class_<{class_}, {class_}::Base> {name.lower()}(class_, "{python_name}", py::is_final{{}});\n'
         )
-        impl.write(f"{name.lower()}.def(py::init([]({class_} const &self) {{ return self; }}));\n")
+        impl.write(
+            f"{name.lower()}.def(py::init([]({class_} const &self) {{ return self; }}));\n"
+        )
         impl.write(f"{class_}::init({name.lower()});\n")
 
     impl.write("return class_;\n")
