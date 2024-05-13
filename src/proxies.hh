@@ -21,22 +21,12 @@ void MathStructure_repr(MathStructure const *mstruct, std::string &output);
 
 inline PrintOptions repr_print_options;
 
-template <typename Child, typename TBase = MathStructure>
-class MathStructureProxy : public TBase {
-  static_assert(std::is_base_of_v<MathStructure, TBase>);
-
+class MathStructureProxy : public MathStructure {
 protected:
   template <typename... Args>
-  MathStructureProxy(Args &&...args) : TBase(std::forward<Args>(args)...) {
+  MathStructureProxy(Args &&...args)
+      : MathStructure(std::forward<Args>(args)...) {
     this->i_ref = 0;
-  }
-
-public:
-  using Base = TBase;
-
-  static void init(qalc_class_<Child, TBase> &c) {
-    c.def(py::init([](Child const &self) { return self; }));
-    Child::_init(c);
   }
 };
 
@@ -83,7 +73,7 @@ void _math_structure_append_child(MathStructure &out, Arg &&child) {
   else                                                                         \
     PROXY_APPEND_CHILD(default);
 
-class MathStructureSequence : public MathStructureProxy<MathStructureSequence> {
+class MathStructureSequence : public MathStructureProxy {
 public:
   void del_item(size_t idx) {
     idx += 1;
@@ -164,8 +154,7 @@ init_math_structure_children(py::module_ &,
           py::is_operator{});
 }
 
-class MathStructureNumberProxy final
-    : public MathStructureProxy<MathStructureNumberProxy> {
+class MathStructureNumberProxy final : public MathStructureProxy {
 public:
   MathStructureNumberProxy() {}
   MathStructureNumberProxy(py::int_ value)
@@ -175,7 +164,8 @@ public:
       : MathStructureProxy(number_from_complex(value)) {}
   MathStructureNumberProxy(Number const &number) : MathStructureProxy(number) {}
 
-  static void _init(qalc_class_<MathStructureNumberProxy, Base> &c) {
+  using Base = MathStructure;
+  static void init(qalc_class_<MathStructureNumberProxy, Base> &c) {
     static_new<>(c);
     static_new<Number>(c);
     static_new<py::int_>(c);
@@ -222,8 +212,7 @@ public:
 };
 
 template <typename Self>
-class MathStructureGenericOperationProxy
-    : public MathStructureProxy<Self, MathStructureSequence> {
+class MathStructureGenericOperationProxy : public MathStructureSequence {
 public:
   MathStructureGenericOperationProxy() { this->m_type = Self::TYPE; }
 
@@ -235,9 +224,8 @@ public:
     }
   }
 
-  static void _init(qalc_class_<Self, MathStructureSequence> &c) {
-    static_new<py::args>(c);
-  }
+  using Base = MathStructureSequence;
+  static void init(qalc_class_<Self, Base> &c) { static_new<py::args>(c); }
 
   void repr(std::string &output) const {
     output += Self::PYTHON_NAME;
@@ -264,7 +252,7 @@ public:
                            "MathStructure." #name)
 
 #define STUB_PROXY(name)                                                       \
-  class MathStructure##name##Proxy final : public MathStructure {              \
+  class MathStructure##name##Proxy final : public MathStructureProxy {         \
   public:                                                                      \
     using Base = MathStructure;                                                \
     static void init(qalc_class_<MathStructure##name##Proxy, Base> &c) {       \
@@ -289,8 +277,7 @@ GENERIC_OPERATION_PROXY(LogicalOr, STRUCT_LOGICAL_OR);
 GENERIC_OPERATION_PROXY(LogicalXor, STRUCT_LOGICAL_XOR);
 GENERIC_OPERATION_PROXY(LogicalNot, STRUCT_LOGICAL_NOT);
 
-class MathStructureComparisonProxy final
-    : public MathStructureProxy<MathStructureComparisonProxy> {
+class MathStructureComparisonProxy final : public MathStructureProxy {
 public:
   MathStructureComparisonProxy(MathStructure *left, ComparisonType type,
                                MathStructure *right) {
@@ -303,8 +290,7 @@ public:
       : MathStructureComparisonProxy(nullptr, COMPARISON_EQUALS, nullptr) {}
 
   using Base = MathStructure;
-
-  static void _init(qalc_class_<MathStructureComparisonProxy, Base> &c) {
+  static void init(qalc_class_<MathStructureComparisonProxy, Base> &c) {
     static_new<MathStructure *, ComparisonType, MathStructure *>(
         c, py::arg("left") = static_cast<MathStructure *>(nullptr),
         py::arg("type") = ComparisonType::COMPARISON_EQUALS,
@@ -330,8 +316,7 @@ public:
 
 STUB_PROXY(Datetime);
 
-class MathStructureVariableProxy final
-    : public MathStructureProxy<MathStructureVariableProxy> {
+class MathStructureVariableProxy final : public MathStructureProxy {
 public:
   MathStructureVariableProxy() { setType(STRUCT_VARIABLE); }
   MathStructureVariableProxy(QalcRef<Variable> variable)
@@ -340,8 +325,7 @@ public:
   }
 
   using Base = MathStructure;
-
-  static void _init(qalc_class_<MathStructureVariableProxy, Base> &c) {
+  static void init(qalc_class_<MathStructureVariableProxy, Base> &c) {
     static_new<QalcRef<Variable>>(c);
     c.def_property("variable", &MathStructure::variable,
                    &MathStructure::setVariable);
@@ -355,8 +339,7 @@ public:
   }
 };
 
-class MathStructureFunctionProxy final
-    : public MathStructureProxy<MathStructureFunctionProxy> {
+class MathStructureFunctionProxy final : public MathStructureProxy {
 public:
   MathStructureFunctionProxy() { setType(STRUCT_FUNCTION); }
 
@@ -375,8 +358,7 @@ public:
   }
 
   using Base = MathStructure;
-
-  static void _init(qalc_class_<MathStructureFunctionProxy, Base> &c) {
+  static void init(qalc_class_<MathStructureFunctionProxy, Base> &c) {
     static_new<QalcRef<MathFunction>, py::args>(c, py::arg("function"),
                                                 py::pos_only{});
     c.def_property_readonly("function",
@@ -402,8 +384,7 @@ public:
 
 STUB_PROXY(Symbolic);
 
-class MathStructureUnitProxy final
-    : public MathStructureProxy<MathStructureUnitProxy> {
+class MathStructureUnitProxy final : public MathStructureProxy {
 public:
   MathStructureUnitProxy() { setType(STRUCT_UNIT); }
   MathStructureUnitProxy(Unit *unit) : MathStructureUnitProxy() {
@@ -411,8 +392,7 @@ public:
   }
 
   using Base = MathStructure;
-
-  static void _init(qalc_class_<MathStructureUnitProxy, Base> &c) {
+  static void init(qalc_class_<MathStructureUnitProxy, Base> &c) {
     static_new<Unit *>(c, py::arg("unit"));
     c.def_property_readonly("unit", [](MathStructureUnitProxy const &self) {
       return QalcRef(self.o_unit);
@@ -427,8 +407,7 @@ public:
   }
 };
 
-class MathStructurePowerProxy final
-    : public MathStructureProxy<MathStructurePowerProxy> {
+class MathStructurePowerProxy final : public MathStructureProxy {
 public:
   MathStructurePowerProxy(MathStructure *base, MathStructure *exponent) {
     setType(STRUCT_POWER);
@@ -438,8 +417,7 @@ public:
   MathStructurePowerProxy() : MathStructurePowerProxy(nullptr, nullptr) {}
 
   using Base = MathStructure;
-
-  static void _init(qalc_class_<MathStructurePowerProxy, Base> &c) {
+  static void init(qalc_class_<MathStructurePowerProxy, Base> &c) {
     static_new<MathStructure *, MathStructure *>(
         c, py::arg("base") = static_cast<MathStructure *>(nullptr),
         py::arg("exponent") = static_cast<MathStructure *>(nullptr));
@@ -458,9 +436,7 @@ public:
 STUB_PROXY(Negate);
 STUB_PROXY(Inverse);
 
-class MathStructureVectorProxy
-    : public MathStructureProxy<MathStructureVectorProxy,
-                                MathStructureSequence> {
+class MathStructureVectorProxy : public MathStructureSequence {
 public:
   MathStructureVectorProxy() { setType(STRUCT_VECTOR); }
   MathStructureVectorProxy(py::sequence items) : MathStructureVectorProxy() {
@@ -469,8 +445,7 @@ public:
   }
 
   using Base = MathStructureSequence;
-
-  static void _init(qalc_class_<MathStructureVectorProxy, Base> &c) {
+  static void init(qalc_class_<MathStructureVectorProxy, Base> &c) {
     static_new<>(c);
     static_new<py::list>(c);
     c.def_property_readonly("rows", &MathStructure::rows)
@@ -527,14 +502,12 @@ public:
   }
 };
 
-class MathStructureUndefinedProxy
-    : public MathStructureProxy<MathStructureUndefinedProxy> {
+class MathStructureUndefinedProxy : public MathStructureProxy {
 public:
   MathStructureUndefinedProxy() { setType(STRUCT_UNDEFINED); }
 
   using Base = MathStructure;
-
-  static void _init(qalc_class_<MathStructureUndefinedProxy, Base> &c) {
+  static void init(qalc_class_<MathStructureUndefinedProxy, Base> &c) {
     static_new<>(c);
   }
 

@@ -705,6 +705,7 @@ with function_declaration(
         impl.write(
             f'qalc_class_<{class_}, {class_}::Base> {name.lower()}(class_, "{python_name}", py::is_final{{}});\n'
         )
+        impl.write(f"{name.lower()}.def(py::init([]({class_} const &self) {{ return self; }}));\n")
         impl.write(f"{class_}::init({name.lower()});\n")
 
     impl.write("return class_;\n")
