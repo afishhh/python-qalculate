@@ -2,6 +2,7 @@
 
 #include <libqalculate/MathStructure.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/pytypes.h>
 
 namespace PYBIND11_NAMESPACE {
 template <> struct polymorphic_type_hook<MathStructure> {

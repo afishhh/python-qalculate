@@ -39,6 +39,9 @@ template <typename T> bool py_check(py::handle h) {
 PYBIND11_MODULE(qalculate, m) {
   m.doc() = "Python bindings for libqalculate";
 
+  py::module_ CollectionsABCModule = m.import("collections.abc");
+  py::type SequenceABC = CollectionsABCModule.attr("Sequence").cast<py::type>();
+
   new Calculator();
 
   // TODO: Properties somewhere?
@@ -138,8 +141,9 @@ PYBIND11_MODULE(qalculate, m) {
   py::implicitly_convertible<std::complex<double>, Number>();
   py::implicitly_convertible<py::int_, Number>();
 
-  auto math_structure_cls =
-      qalc_class_<MathStructure>(m, "MathStructure", py::is_final{});
+  auto math_structure_cls = qalc_class_<MathStructure>(m, "MathStructure");
+
+  SequenceABC.attr("register")(math_structure_cls);
 
   add_expression_name(m);
   add_expression_item(m);
@@ -167,7 +171,7 @@ PYBIND11_MODULE(qalculate, m) {
     return MathStructureRef(new proxy(args[0].cast<ctor_type>()));
 
   // FIXME: Clean this up finally...
-  add_math_structure_proxies(init_math_structure_children(
+  add_math_structure_proxies(init_math_structure_sequence(
       m,
       init_auto_math_structure(
           math_structure_cls

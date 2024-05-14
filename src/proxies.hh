@@ -21,15 +21,6 @@ void MathStructure_repr(MathStructure const *mstruct, std::string &output);
 
 inline PrintOptions repr_print_options;
 
-class MathStructureProxy : public MathStructure {
-protected:
-  template <typename... Args>
-  MathStructureProxy(Args &&...args)
-      : MathStructure(std::forward<Args>(args)...) {
-    this->i_ref = 0;
-  }
-};
-
 template <typename... Extra>
 constexpr bool has_any_arg_extra = (std::is_base_of_v<py::arg, Extra> || ...);
 
@@ -73,30 +64,24 @@ void _math_structure_append_child(MathStructure &out, Arg &&child) {
   else                                                                         \
     PROXY_APPEND_CHILD(default);
 
-class MathStructureSequence : public MathStructureProxy {
-public:
-  void del_item(size_t idx) {
-    idx += 1;
-    if (idx > this->size() || idx == 0)
-      throw py::index_error{};
-    this->delChild(idx);
-  }
+class MathStructureIterator {};
 
-  void append(MathStructure *other) {
-    other->ref();
-    this->addChild_nocopy(other);
+class MathStructureProxy : public MathStructure {
+protected:
+  template <typename... Args>
+  MathStructureProxy(Args &&...args)
+      : MathStructure(std::forward<Args>(args)...) {
+    this->i_ref = 0;
   }
 };
 
-inline MathStructure const &
-math_structure_getitem_idx(MathStructure const &self, size_t idx) {
+inline MathStructure &mstruct_getitem(MathStructure &self, size_t idx) {
   if (idx >= self.size())
     throw py::index_error();
   return self[idx];
 }
 
-inline py::list math_structure_getitem_slice(MathStructure const &self,
-                                             py::slice slice) {
+inline py::list mstruct_getslice(MathStructure &self, py::slice slice) {
   auto wrap_index = [self](ssize_t x) -> size_t {
     if (x < 0)
       return self.size() + -(-x % self.size());
@@ -127,18 +112,72 @@ inline py::list math_structure_getitem_slice(MathStructure const &self,
   return result;
 }
 
+inline bool mstruct_contains(MathStructure &self, MathStructure const &other) {
+  for (size_t i = 0; i < self.size(); ++i)
+    if (self[i].equals(other, false, true))
+      return true;
+  return false;
+}
+
+inline size_t mstruct_count(MathStructure &self, MathStructure const &other) {
+  size_t result = 0;
+  for (size_t i = 0; i < self.size(); ++i)
+    if (self[i].equals(other, false, true))
+      result += 1;
+  return result;
+}
+
+inline ssize_t mstruct_index(MathStructure &self, MathStructure const &other) {
+  for (size_t i = 0; i < self.size(); ++i)
+    if (self[i].equals(other, false, true))
+      return i;
+
+  std::string error_msg;
+  MathStructure_repr(&other, error_msg);
+  error_msg += " is not a child of this MathStructure";
+  throw py::value_error(error_msg);
+}
+
+class MathStructureSequence : public MathStructureProxy {
+public:
+  void erase(size_t idx) {
+    idx += 1;
+    if (idx > this->size() || idx == 0)
+      throw py::index_error{};
+    this->delChild(idx);
+  }
+
+  void set_item(size_t idx, MathStructure *value) {
+    idx += 1;
+    if (idx > this->size() || idx == 0)
+      throw py::index_error{};
+    value->ref();
+    setChild_nocopy(value, idx);
+  }
+
+  void append(MathStructure *other) {
+    other->ref();
+    this->addChild_nocopy(other);
+  }
+};
+
+#define ADD_MATHSTRUCTURE_GETITEM                                              \
+  def("__getitem__", mstruct_getitem,                                          \
+      py::return_value_policy::reference_internal)                             \
+      .def("__getitem__", mstruct_getslice,                                    \
+           py::return_value_policy::reference_internal)
+
 inline qalc_class_<MathStructure> &
-init_math_structure_children(py::module_ &,
+init_math_structure_sequence(py::module_ &,
                              qalc_class_<MathStructure> &mstruct) {
   qalc_class_<MathStructureSequence, MathStructure>(mstruct, "Sequence")
-      .def("append", &MathStructureSequence::append, py::is_operator{})
-      .def("__delitem__", &MathStructureSequence::del_item, py::is_operator{});
+      .def("append", &MathStructureSequence::append)
+      .def("__setitem__", &MathStructureSequence::set_item)
+      .def("__delitem__", &MathStructureSequence::erase);
 
-  return mstruct
-      .def("__getitem__", &math_structure_getitem_idx,
-           py::return_value_policy::reference_internal)
-      .def("__getitem__", &math_structure_getitem_slice,
-           py::return_value_policy::reference_internal)
+  return mstruct.ADD_MATHSTRUCTURE_GETITEM.def("__contains__", mstruct_contains)
+      .def("count", mstruct_count)
+      .def("index", mstruct_index)
 
       .def(
           "__len__", [](MathStructure const &self) { return self.size(); },
@@ -152,6 +191,14 @@ init_math_structure_children(py::module_ &,
             return output;
           },
           py::is_operator{});
+}
+
+template <typename Proxy>
+void math_structure_proxy_init(qalc_class_<MathStructure> scope,
+                               char const *name) {
+  qalc_class_<Proxy, typename Proxy::Base> class_(scope, name, py::is_final{});
+  class_.def(py::init([](Proxy const &self) { return self; }));
+  Proxy::init(class_);
 }
 
 class MathStructureNumberProxy final : public MathStructureProxy {
@@ -450,10 +497,7 @@ public:
     static_new<py::list>(c);
     c.def_property_readonly("rows", &MathStructure::rows)
         .def_property_readonly("columns", &MathStructure::columns)
-        .def("__getitem__", &math_structure_getitem_idx,
-             py::return_value_policy::reference_internal)
-        .def("__getitem__", &math_structure_getitem_slice,
-             py::return_value_policy::reference_internal)
+        .ADD_MATHSTRUCTURE_GETITEM
         .def(
             "__getitem__",
             [](MathStructure &self, std::tuple<size_t, size_t> xy) {

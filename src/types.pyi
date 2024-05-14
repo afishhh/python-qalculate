@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import ClassVar, overload
 
 class Number:
@@ -45,7 +46,7 @@ class Unit(ExpressionItem):
     RADIAN: ClassVar[Unit]
     GRADIAN: ClassVar[Unit]
 
-class MathStructure:
+class MathStructure(Sequence[MathStructure]):
     def __init__(self, value: _MathStructureConstructibleFrom): ...
 
     def compare(self, other: MathStructure) -> ComparisonResult: ...

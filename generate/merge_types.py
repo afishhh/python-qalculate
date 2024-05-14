@@ -35,7 +35,7 @@ def merge_typing_files(lower: Path | str, upper: Path | str, context: PyContext)
                 target=ast.Name(convertible_name),
                 annotation=ast.Name("typing.TypeAlias"),
                 value=make_union(castable_from + [type], type, convertible_name),
-                simple=1
+                simple=1,
             )
         )
         new_body.append(
@@ -43,7 +43,7 @@ def merge_typing_files(lower: Path | str, upper: Path | str, context: PyContext)
                 target=ast.Name(constructible_name),
                 annotation=ast.Name("typing.TypeAlias"),
                 value=make_union(castable_from, type, convertible_name),
-                simple=1
+                simple=1,
             )
         )
 
@@ -69,9 +69,7 @@ def merge_typing_files(lower: Path | str, upper: Path | str, context: PyContext)
 
     lower_classes: dict[str, ast.ClassDef] = {}
     imported_aliases: set[tuple[str, str]] = set()
-    imports: list[ast.alias] = [
-        ast.alias("typing")
-    ]
+    imports: list[ast.alias] = [ast.alias("typing")]
 
     for stmt in lower_module.body:
         if isinstance(stmt, ast.ClassDef):
@@ -93,8 +91,10 @@ def merge_typing_files(lower: Path | str, upper: Path | str, context: PyContext)
                     base.id for base in lower_class.bases if isinstance(base, ast.Name)
                 }
                 for base in stmt.bases:
-                    assert isinstance(base, ast.Name)
-                    if base.id not in lower_base_names:
+                    if (
+                        not isinstance(base, ast.Name)
+                        or base.id not in lower_base_names
+                    ):
                         lower_class.bases.append(base)
             else:
                 new_body.append(stmt)

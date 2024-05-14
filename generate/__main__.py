@@ -79,6 +79,7 @@ classes.add_implcit_cast("MathFunction", "MathStructure")
 
 class_extra_impl: dict[PyClass, str] = {}
 
+
 def wrap_method(
     pyclass: PyClass,
     method: Struct.Method,
@@ -189,7 +190,11 @@ def auto_wrap_property(
     prop = pyclass.property(name, docstring=getter.docstring)
     prop.getter(f"&{pyclass.underlying_name}::{getter.name}", type=getter.return_type)
     if setter is not None:
-        prop.setter(f"&{pyclass.underlying_name}::{setter.name}", param_type=setter.params[0].type)
+        prop.setter(
+            f"&{pyclass.underlying_name}::{setter.name}",
+            param_type=setter.params[0].type,
+        )
+
 
 header.write(
     """
@@ -714,12 +719,8 @@ with function_declaration(
         if python_name == "Datetime":
             python_name = "DateTime"
         impl.write(
-            f'qalc_class_<{class_}, {class_}::Base> {name.lower()}(class_, "{python_name}", py::is_final{{}});\n'
+            f"math_structure_proxy_init<{class_}>(class_, {cpp_string(python_name)});\n"
         )
-        impl.write(
-            f"{name.lower()}.def(py::init([]({class_} const &self) {{ return self; }}));\n"
-        )
-        impl.write(f"{class_}::init({name.lower()});\n")
 
     impl.write("return class_;\n")
 
