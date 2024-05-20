@@ -112,11 +112,11 @@ PYBIND11_MODULE(qalculate, m) {
 
           .def(
               "print",
-              [](Number const &self, PrintOptions const &options) {
-                return self.print(options);
+              [](Number const &self, PrintOptions const *options) {
+                return self.print(options ? *options : global_print_options);
               },
-              py::arg("options") = &global_print_options, py::pos_only{},
-              py::is_operator{})
+              py::arg("options") = static_cast<PrintOptions *>(nullptr),
+              py::pos_only{}, py::is_operator{})
 
           .def("__int__", number_to_python_int)
           .def("__float__", number_to_python_float)
@@ -194,6 +194,9 @@ PYBIND11_MODULE(qalculate, m) {
                         NEW_PROXY_CONVERSION(py_check<Variable>,
                                              QalcRef<Variable>,
                                              MathStructureVariableProxy);
+                        NEW_PROXY_CONVERSION(py_check<UnknownVariable>,
+                                             QalcRef<Variable>,
+                                             MathStructureVariableProxy);
                         NEW_PROXY_CONVERSION(py_check<MathFunction>,
                                              QalcRef<MathFunction>,
                                              MathStructureFunctionProxy);
@@ -224,6 +227,12 @@ PYBIND11_MODULE(qalculate, m) {
                   },
                   py::arg("options") = &global_print_options)
 
+              .def("__bool__",
+                   [](MathStructure const &self) {
+                     return !(self.isZero() || self.isUndefined() ||
+                              self.isAborted());
+                   })
+
               .def(
                   "__eq__",
                   [](MathStructure const &self, MathStructure const &other) {
@@ -237,8 +246,11 @@ PYBIND11_MODULE(qalculate, m) {
   }));
 
   py::implicitly_convertible<Variable, MathStructureVariableProxy>();
+  py::implicitly_convertible<Variable, MathStructure>();
+  py::implicitly_convertible<UnknownVariable, MathStructure>();
   py::implicitly_convertible<MathStructureVariableProxy, Variable>();
   py::implicitly_convertible<MathFunction, MathStructureFunctionProxy>();
+  py::implicitly_convertible<MathFunction, MathStructure>();
 
   m.def("get_message_print_options",
         []() { return CALCULATOR->messagePrintOptions(); });
@@ -251,10 +263,12 @@ PYBIND11_MODULE(qalculate, m) {
 
   m.def(
       "parse",
-      [](std::string_view s) {
-        return MathStructureRef::adopt(CALCULATOR->parse(std::string(s)));
+      [](std::string_view s, ParseOptions const *options) {
+        return MathStructureRef::adopt(CALCULATOR->parse(
+            std::string(s), options ? *options : global_parse_options));
       },
-      py::arg("value"), py::pos_only{});
+      py::arg("value"), py::pos_only{},
+      py::arg("options") = static_cast<ParseOptions *>(nullptr));
 
   m.def(
       "calculate",
