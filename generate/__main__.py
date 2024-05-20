@@ -188,7 +188,11 @@ def auto_wrap_property(
         name = camel_to_snake(getter.name)
 
     prop = pyclass.property(name, docstring=getter.docstring)
-    prop.getter(f"&{pyclass.underlying_name}::{getter.name}", type=getter.return_type)
+    if getter.params != []:
+        with prop.getter(type=getter.return_type) as body:
+            body.write(f"return self.{getter.name}();\n")
+    else:
+        prop.getter(f"&{pyclass.underlying_name}::{getter.name}", type=getter.return_type)
     if setter is not None:
         prop.setter(
             f"&{pyclass.underlying_name}::{setter.name}",
@@ -594,17 +598,17 @@ for variant in struct.members:
 structure_types.remove("ABORTED")
 
 properties_for(
-    classes["MathStructure"],
+    MathStructure,
     renames={
         name: camel_to_snake(name)
         for name in (
             "isEmptySymbol",
-            "isInfinity"
-            "isInteger"
-            "isZero"
-            "isApproximatelyZero"
-            "isOne"
-            "isMinusOne"
+            "isInfinity",
+            "isInteger",
+            "isZero",
+            "isApproximatelyZero",
+            "isOne",
+            "isMinusOne",
             "isApproximate",
             "precision",
             "containsOpaqueContents",
