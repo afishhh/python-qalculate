@@ -1,5 +1,5 @@
 > [!WARNING]
-> This project is under heavy development!
+> This project is ~~under heavy development!~~ abandoned.
 >
 > Breaking changes may be introduced at any moment.
 
@@ -31,4 +31,4 @@ cmake --build . -j $(nproc)
 
 ### Nix(OS)
 
-The package in the flake is still a work in process, it is not a proper python package.
+The package in the flake is still a work in progress, it is not a proper python package.
